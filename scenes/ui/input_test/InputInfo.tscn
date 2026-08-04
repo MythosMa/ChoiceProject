@@ -1,0 +1,64 @@
+[gd_scene format=3 uid="uid://dq5miygec5y17"]
+
+[ext_resource type="Theme" uid="uid://x38lijysy8xo" path="res://scenes/ui/input_test/input_test.tres" id="1_k3jqe"]
+[ext_resource type="Script" uid="uid://byp33qqratq1x" path="res://scenes/ui/input_test/InputInfo.cs" id="2_sc5aq"]
+
+[node name="InputInfo" type="PanelContainer" unique_id=2120672280 node_paths=PackedStringArray("frameLabel", "directionLabel", "actionLabel")]
+custom_minimum_size = Vector2(0, 52)
+theme = ExtResource("1_k3jqe")
+script = ExtResource("2_sc5aq")
+frameLabel = NodePath("MarginContainer/VBoxContainer/HBoxContainer/FrameContainer/Frame")
+directionLabel = NodePath("MarginContainer/VBoxContainer/HBoxContainer/DirectonContainer/Direction")
+actionLabel = NodePath("MarginContainer/VBoxContainer/HBoxContainer/AttackContainer/Attack")
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=1945051115]
+custom_minimum_size = Vector2(192, 51)
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer" unique_id=195014110]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer" unique_id=1168335793]
+custom_minimum_size = Vector2(0, 23)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="FrameContainer" type="PanelContainer" parent="MarginContainer/VBoxContainer/HBoxContainer" unique_id=1961705746]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+
+[node name="Frame" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer/FrameContainer" unique_id=1087959486]
+custom_minimum_size = Vector2(25, 0)
+layout_mode = 2
+text = "99"
+horizontal_alignment = 2
+
+[node name="DirectonContainer" type="PanelContainer" parent="MarginContainer/VBoxContainer/HBoxContainer" unique_id=268461584]
+custom_minimum_size = Vector2(16, 0)
+layout_mode = 2
+
+[node name="Direction" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer/DirectonContainer" unique_id=440371408]
+custom_minimum_size = Vector2(16, 0)
+layout_mode = 2
+text = "↘"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AttackContainer" type="PanelContainer" parent="MarginContainer/VBoxContainer/HBoxContainer" unique_id=459330344]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+
+[node name="Attack" type="Label" parent="MarginContainer/VBoxContainer/HBoxContainer/AttackContainer" unique_id=302977392]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "LP|HP|LK|HK"
+vertical_alignment = 1
+
+[node name="ColorRect" type="ColorRect" parent="MarginContainer/VBoxContainer" unique_id=306252852]
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+color = Color(0.58383155, 0.58383155, 0.58383155, 1)

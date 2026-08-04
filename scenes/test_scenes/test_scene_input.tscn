@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://w2evfffabndc"]
+
+[ext_resource type="PackedScene" uid="uid://djmldyt0n86ks" path="res://scenes/ui/input_test/InputScreen.tscn" id="1_g770j"]
+
+[node name="TestSceneDefault" type="Node2D" unique_id=575392864]
+
+[node name="InputScreen" parent="." unique_id=530026716 instance=ExtResource("1_g770j")]

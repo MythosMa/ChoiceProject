@@ -1,0 +1,69 @@
+[gd_scene format=3 uid="uid://djmldyt0n86ks"]
+
+[ext_resource type="PackedScene" uid="uid://dq5miygec5y17" path="res://scenes/ui/input_test/InputInfo.tscn" id="1_pi6io"]
+[ext_resource type="Script" uid="uid://b4cedg243lnrd" path="res://scenes/ui/input_test/InputScreen.cs" id="1_u54xi"]
+
+[node name="InputScreen" type="CanvasLayer" unique_id=530026716 node_paths=PackedStringArray("inputInfos")]
+script = ExtResource("1_u54xi")
+inputInfos = [NodePath("MarginContainer/VBoxContainer/InputInfo"), NodePath("MarginContainer/VBoxContainer/InputInfo2"), NodePath("MarginContainer/VBoxContainer/InputInfo3"), NodePath("MarginContainer/VBoxContainer/InputInfo4"), NodePath("MarginContainer/VBoxContainer/InputInfo5"), NodePath("MarginContainer/VBoxContainer/InputInfo6"), NodePath("MarginContainer/VBoxContainer/InputInfo7"), NodePath("MarginContainer/VBoxContainer/InputInfo8"), NodePath("MarginContainer/VBoxContainer/InputInfo9"), NodePath("MarginContainer/VBoxContainer/InputInfo10"), NodePath("MarginContainer/VBoxContainer/InputInfo11"), NodePath("MarginContainer/VBoxContainer/InputInfo12"), NodePath("MarginContainer/VBoxContainer/InputInfo13"), NodePath("MarginContainer/VBoxContainer/InputInfo14"), NodePath("MarginContainer/VBoxContainer/InputInfo15")]
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=1306512823]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer" unique_id=747761508]
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+
+[node name="InputInfo" parent="MarginContainer/VBoxContainer" unique_id=2120672280 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo2" parent="MarginContainer/VBoxContainer" unique_id=334017662 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo3" parent="MarginContainer/VBoxContainer" unique_id=1448968083 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo4" parent="MarginContainer/VBoxContainer" unique_id=1701012482 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo5" parent="MarginContainer/VBoxContainer" unique_id=1307433432 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo6" parent="MarginContainer/VBoxContainer" unique_id=1275053057 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo7" parent="MarginContainer/VBoxContainer" unique_id=947321244 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo8" parent="MarginContainer/VBoxContainer" unique_id=1603532422 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo9" parent="MarginContainer/VBoxContainer" unique_id=1788039719 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo10" parent="MarginContainer/VBoxContainer" unique_id=1409239016 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo11" parent="MarginContainer/VBoxContainer" unique_id=853359505 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo12" parent="MarginContainer/VBoxContainer" unique_id=581745490 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo13" parent="MarginContainer/VBoxContainer" unique_id=617402343 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo14" parent="MarginContainer/VBoxContainer" unique_id=53647991 instance=ExtResource("1_pi6io")]
+layout_mode = 2
+
+[node name="InputInfo15" parent="MarginContainer/VBoxContainer" unique_id=270231031 instance=ExtResource("1_pi6io")]
+layout_mode = 2
