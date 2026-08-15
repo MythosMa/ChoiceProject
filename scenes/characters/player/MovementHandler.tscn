@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://djjrdkuvc836e"]
+
+[ext_resource type="Script" uid="uid://c470c5o57iunw" path="res://scenes/characters/player/MovementHandler.cs" id="1_tiaem"]
+
+[node name="MovementHandler" type="Node" unique_id=406152192]
+script = ExtResource("1_tiaem")

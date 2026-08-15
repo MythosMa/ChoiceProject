@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://bw75oe02vbxvo"]
+
+[ext_resource type="Script" uid="uid://d20vpblgewdfb" path="res://scenes/characters/player/InputStateMachine.cs" id="1_4r7sw"]
+[ext_resource type="PackedScene" uid="uid://djjrdkuvc836e" path="res://scenes/characters/player/MovementHandler.tscn" id="2_ef2ah"]
+[ext_resource type="PackedScene" uid="uid://d288vuhp41h8p" path="res://scenes/characters/player/CombatHandler.tscn" id="3_4l2ib"]
+
+[node name="InputStateMachine" type="Node" unique_id=1868557808 node_paths=PackedStringArray("movementHandler", "combatHandler")]
+script = ExtResource("1_4r7sw")
+movementHandler = NodePath("MovementHandler")
+combatHandler = NodePath("CombatHandler")
+
+[node name="MovementHandler" parent="." unique_id=406152192 instance=ExtResource("2_ef2ah")]
+
+[node name="CombatHandler" parent="." unique_id=809220710 instance=ExtResource("3_4l2ib")]

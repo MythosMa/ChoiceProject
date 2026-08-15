@@ -24,9 +24,10 @@ public enum InputButtons
     LK = 1 << 6,
     HK = 1 << 7,
 
-    // 系统键（预留：跳跃/格挡）
+    // 系统键（预留：跳跃/闪避/格挡）
     Jump = 1 << 8,
-    Block = 1 << 9,
+    Dodge = 1 << 9,
+    Block = 1 << 10,
 
     /// <summary>所有方向键的掩码。</summary>
     DirectionMask = Up | Down | Left | Right,

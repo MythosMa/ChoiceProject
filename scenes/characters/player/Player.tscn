@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://buexogmyqp6gq"]
+
+[ext_resource type="Script" uid="uid://dy48rl1ge50i1" path="res://scenes/characters/player/Player.cs" id="1_b7oxf"]
+[ext_resource type="Texture2D" uid="uid://qkaroutfnxm" path="res://assets/textures/white.png" id="1_db84v"]
+[ext_resource type="PackedScene" uid="uid://bw75oe02vbxvo" path="res://scenes/characters/player/InputStateMachine.tscn" id="2_c12fh"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_srvkq"]
+size = Vector2(16, 16)
+
+[node name="Player" type="CharacterBody2D" unique_id=1416864205 node_paths=PackedStringArray("inputStateMachine")]
+script = ExtResource("1_b7oxf")
+inputStateMachine = NodePath("InputStateMachine")
+
+[node name="InputStateMachine" parent="." unique_id=1868557808 node_paths=PackedStringArray("player") instance=ExtResource("2_c12fh")]
+player = NodePath("..")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1837309345]
+shape = SubResource("RectangleShape2D_srvkq")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1111402596]
+texture = ExtResource("1_db84v")

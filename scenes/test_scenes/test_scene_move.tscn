@@ -1,0 +1,66 @@
+[gd_scene format=3 uid="uid://c85on18pc2whp"]
+
+[ext_resource type="PackedScene" uid="uid://buexogmyqp6gq" path="res://scenes/characters/player/Player.tscn" id="2_vqw25"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_vqw25"]
+load_path = "res://.godot/imported/white.png-5a24addff47c5cf030d8933848d133b0.ctex"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_vqw25"]
+size = Vector2(2240, 480)
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_nxk1p"]
+load_path = "res://.godot/imported/white.png-5a24addff47c5cf030d8933848d133b0.ctex"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_nxk1p"]
+size = Vector2(2240, 480)
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_pul4o"]
+load_path = "res://.godot/imported/white.png-5a24addff47c5cf030d8933848d133b0.ctex"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_315dr"]
+size = Vector2(2240, 480)
+
+[node name="TestSceneDefault" type="Node2D" unique_id=575392864]
+
+[node name="Map" type="Node2D" parent="." unique_id=1196907258]
+
+[node name="Ground" type="StaticBody2D" parent="Map" unique_id=1863005724]
+position = Vector2(938, 941)
+
+[node name="Sprite2D" type="Sprite2D" parent="Map/Ground" unique_id=2039627721]
+position = Vector2(42, 0)
+scale = Vector2(140, 30)
+texture = SubResource("CompressedTexture2D_vqw25")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Map/Ground" unique_id=2022471217]
+position = Vector2(42, 0)
+shape = SubResource("RectangleShape2D_vqw25")
+
+[node name="LeftWall" type="StaticBody2D" parent="Map" unique_id=558200397]
+position = Vector2(-100, 429)
+rotation = -1.5707964
+
+[node name="Sprite2D" type="Sprite2D" parent="Map/LeftWall" unique_id=1162968359]
+position = Vector2(42, 0)
+scale = Vector2(140, 30)
+texture = SubResource("CompressedTexture2D_nxk1p")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Map/LeftWall" unique_id=1283683954]
+position = Vector2(42, 0)
+shape = SubResource("RectangleShape2D_nxk1p")
+
+[node name="RightWall" type="StaticBody2D" parent="Map" unique_id=1848810425]
+position = Vector2(2000, 423)
+rotation = -1.5707964
+
+[node name="Sprite2D" type="Sprite2D" parent="Map/RightWall" unique_id=2015771979]
+position = Vector2(42, 0)
+scale = Vector2(140, 30)
+texture = SubResource("CompressedTexture2D_pul4o")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Map/RightWall" unique_id=323538987]
+position = Vector2(42, 0)
+shape = SubResource("RectangleShape2D_315dr")
+
+[node name="Player" parent="." unique_id=1416864205 instance=ExtResource("2_vqw25")]
+position = Vector2(524, 431)

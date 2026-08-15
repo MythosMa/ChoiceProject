@@ -41,6 +41,7 @@ public partial class InputManager : Node
 		("light_kick", InputButtons.LK),
 		("heavy_kick", InputButtons.HK),
 		("jump", InputButtons.Jump),
+		("dodge", InputButtons.Dodge),
 		("block", InputButtons.Block),
 	};
 
@@ -61,6 +62,13 @@ public partial class InputManager : Node
 
 	private readonly List<InputRecord> _buffer = new();
 	private int _nextId;
+
+	public override void _Ready()
+	{
+		// 初始状态（无按键）也写入一条中立记录，避免缓冲一开始为空；
+		// 之后每帧未操作时会持续累加它的持续帧数
+		AppendRecord(new InputRecord(_nextId++, 0, Direction.Neutral, AttackType.None));
+	}
 
 	public override void _PhysicsProcess(double delta)
 	{

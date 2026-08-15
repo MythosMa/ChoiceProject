@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://d288vuhp41h8p"]
+
+[ext_resource type="Script" uid="uid://b45ko8hyye7u1" path="res://scenes/characters/player/CombatHandler.cs" id="1_vama5"]
+
+[node name="CombatHandler" type="Node" unique_id=809220710]
+script = ExtResource("1_vama5")

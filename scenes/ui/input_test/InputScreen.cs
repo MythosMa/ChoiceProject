@@ -18,7 +18,7 @@ public partial class InputScreen : CanvasLayer
 		{
 			if (i < InputManager.Instance.Buffer.Count)
 			{
-				inputInfos[i].setInputRecord(InputManager.Instance.Buffer[^(i + 1)]);
+				inputInfos[i].SetInputRecord(InputManager.Instance.Buffer[^(i + 1)]);
 			}
 			else
 			{

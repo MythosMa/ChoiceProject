@@ -19,7 +19,7 @@ public partial class InputInfo : PanelContainer
 		actionLabel.Visible = false;
 	}
 
-	public void setInputRecord(InputRecord record)
+	public void SetInputRecord(InputRecord record)
 	{
 		frameLabel.Text = (record.DurationFrames > 99 ? 99 : record.DurationFrames).ToString();
 		directionLabel.Text = Tools.GetDirectionArrow(record.Direction);
