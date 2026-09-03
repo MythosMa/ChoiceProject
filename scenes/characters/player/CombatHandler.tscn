@@ -4,3 +4,4 @@
 
 [node name="CombatHandler" type="Node" unique_id=809220710]
 script = ExtResource("1_vama5")
+checkFrames = 60

@@ -27,7 +27,7 @@ public partial class InputStateMachine : Node
 	public override void _Ready()
 	{
 		movementHandler.Initialize(player);
-		combatHandler.Initialize(player);
+		combatHandler.Initialize(player, this);
 		TransitionTo(movementHandler);
 	}
 
@@ -37,6 +37,18 @@ public partial class InputStateMachine : Node
 		{
 			return;
 		}
+
+		InputManager input = InputManager.Instance;
+
+		InputButtons buttons = Tools.GetPressed(input.Previous, input.Current);
+
+		if (currentInputReceiver == movementHandler && (buttons & InputButtons.AttackMask) != InputButtons.None)
+		{
+			TransitionTo(combatHandler);
+			return;
+		}
+
+
 		currentInputReceiver?.Tick(delta);
 	}
 

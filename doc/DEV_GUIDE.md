@@ -1,6 +1,6 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.3  |  日期：2026-08-01  |  状态：架构期
+> 版本：v0.4  |  日期：2026-08-15  |  状态：Phase 0 完成，进入 Phase 1
 
 ---
 
@@ -17,96 +17,45 @@
 
 ## 二、项目目录结构
 
-按实体/节点归类，每个单元自成一个文件夹，包含其场景文件（.tscn）、脚本（.cs）和专属资源（.tres）。
+按实体/节点归类，每个单元自成一个文件夹，包含其场景文件（.tscn）、脚本（.cs）和专属资源。以下为当前实际结构（2026-08-15）：
 
 ```
 choice_project/
 ├── project.godot
-├── .gitignore
+├── choice_project.sln / .csproj      # C# 工程文件
+├── .editorconfig
+├── icon.svg
 │
-├── Core/                         # 全局核心系统（无对应场景节点）
-│   ├── GameManager.cs            # 游戏生命周期、全局状态
-│   ├── InputManager.cs           # 输入仲裁状态机
-│   ├── EventBus.cs               # 全局事件总线
-│   └── Config/                   # 全局配置
-│       ├── InputConfig.tres      # 输入手感参数（缓冲帧、切换延迟等）
-│       ├── BalanceConfig.tres    # 数值平衡参数（确反倍率、气槽速度等）
-│       └── FeedbackConfig.tres   # 反馈参数（顿帧帧数、震屏强度等）
+├── core/                             # 全局 Autoload 系统
+│   └── InputManager.cs               # 输入采集：位掩码快照 + 输入缓冲（纯记录，不仲裁）
 │
-├── Player/                       # 玩家角色单元
-│   ├── Player.tscn               # 玩家场景（挂载所有子节点）
-│   ├── PlayerController.cs       # 移动、物理、状态切换
-│   ├── PlayerCombat.cs           # 战斗逻辑、招式执行
-│   └── PlayerAnim.cs             # 色块动画（后期替换为正式动画）
+├── scenes/                           # 按实体归类，.tscn 与 .cs 放一起
+│   ├── characters/
+│   │   └── player/
+│   │       ├── Player.tscn/.cs               # CharacterBody2D：物理积分、意图接口
+│   │       ├── InputStateMachine.tscn/.cs    # 输入仲裁/路由：全局触发器、状态切换
+│   │       ├── MovementHandler.tscn/.cs      # 移动状态处理器
+│   │       └── CombatHandler.tscn/.cs        # 战斗状态处理器（择窗口、招式路由）
+│   ├── ui/
+│   │   └── input_test/               # 输入调试 UI（InputScreen + InputInfo）
+│   └── test_scenes/                  # 测试场景（test_scene_move 等）
 │
-├── Combat/                       # 战斗系统（逻辑模块，无独立场景）
-│   ├── ComboSystem.cs            # 连招路由与管理
-│   ├── HitboxManager.cs          # 攻击判定
-│   ├── HurtboxManager.cs         # 受击判定
-│   ├── DamageCalculator.cs       # 伤害计算（含确反加成）
-│   └── FeedbackSystem.cs         # 顿帧、震屏、击退、音效触发
+├── scripts/                          # 纯逻辑/数据，不依赖场景节点
+│   ├── data/                         # 输入数据类型（InputButtons/Direction/AttackType/InputRecord）
+│   └── tools/                        # 静态工具函数（Tools.cs）
 │
-├── Enemies/                      # 敌人单元
-│   ├── Base/                     # 敌人基类
-│   │   ├── EnemyBase.tscn        # 敌人基础场景模板
-│   │   ├── EnemyBase.cs          # 敌人通用逻辑
-│   │   ├── EnemyAI.cs            # AI状态机
-│   │   └── EnemySignal.cs        # 出招预兆信号系统
-│   │
-│   ├── Direct/                   # 直球型敌人
-│   │   ├── DirectEnemy.tscn
-│   │   └── DirectEnemy.cs
-│   │
-│   ├── Multi/                    # 多段型敌人
-│   │   ├── MultiEnemy.tscn
-│   │   └── MultiEnemy.cs
-│   │
-│   └── Switch/                   # 变招型敌人
-│       ├── SwitchEnemy.tscn
-│       └── SwitchEnemy.cs
+├── assets/                           # 共享素材
+│   └── textures/white.png            # 唯一占位纹理（色块 = 白纹理 + Scale + Modulate）
 │
-├── Boss/                         # Boss单元
-│   ├── Boss.tscn
-│   ├── BossController.cs         # Boss主控
-│   ├── BossPhaseManager.cs       # 阶段管理
-│   └── BossPatterns.cs           # 出题模式库
-│
-├── Mechanisms/                   # 机关单元
-│   ├── Base/
-│   │   ├── MechanismBase.tscn
-│   │   └── MechanismBase.cs
-│   │
-│   ├── Counter/                  # 喂招型机关
-│   │   ├── CounterMechanism.tscn
-│   │   └── CounterMechanism.cs
-│   │
-│   ├── Bet/                      # 押注型机关
-│   │   ├── BetMechanism.tscn
-│   │   └── BetMechanism.cs
-│   │
-│   └── Switch/                   # 变招型机关
-│       ├── SwitchMechanism.tscn
-│       └── SwitchMechanism.cs
-│
-├── UI/                           # UI单元
-│   ├── HUD.tscn
-│   ├── HUD.cs                    # 血条、气槽显示
-│   ├── DebugOverlay.tscn
-│   └── DebugOverlay.cs           # 调试信息覆盖层
-│
-├── Scenes/                       # 关卡/场景
-│   └── TestArena.tscn            # Demo测试场景
-│
-└── Assets/                       # 共享资源
-    ├── Placeholder/              # 占位色块素材
-    └── Audio/                    # 占位音效
+└── doc/                              # 项目文档（GAME_DESIGN / DEV_GUIDE / PROJECT_DESIGN）
 ```
 
 **目录原则：**
-- 每个实体（玩家、敌人、机关、Boss）自成一个文件夹，场景+脚本+专属资源放在一起
-- 纯逻辑模块（Combat、Core）没有场景文件，只有脚本和配置
-- 共享资源（占位素材、音效）放在 Assets 下
-- 关卡场景放在 Scenes 下
+- scenes/ 下每个实体单元自包含，场景与脚本放在一起；未来的敌人、Boss、机关按同样原则增设（如 scenes/characters/enemies/、scenes/mechanisms/）
+- 需要注册为 Autoload 的全局系统放 core/
+- 不属于任何场景的纯数据结构和静态工具放 scripts/
+- 测试场景放 scenes/test_scenes/，正式关卡后续单设
+- 配置参数（.tres）随使用方模块存放；全局手感/数值配置届时在 core/config/ 下集中（Phase 1 引入）
 
 ---
 
@@ -128,9 +77,9 @@ choice_project/
 │              │ │              │ │              │
 │ 职责：       │ │ 职责：       │ │ 职责：       │
 │ · 采集原始输入│ │ · 连招路由   │ │ · 顿帧       │
-│ · 状态仲裁   │ │ · 伤害计算   │ │ · 震屏       │
+│ · 位掩码快照 │ │ · 伤害计算   │ │ · 震屏       │
 │ · 输入缓冲   │ │ · 确反判定   │ │ · 击退       │
-│ · 预读机制   │ │ · 资源管理   │ │ · 音效触发   │
+│ (纯记录,不仲裁)│ │ · 资源管理   │ │ · 音效触发   │
 └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
        │                │                │
        ▼                ▼                ▼
@@ -138,9 +87,11 @@ choice_project/
 │   Player     │ │    Enemy     │ │     UI       │
 │              │ │              │ │              │
 │ 职责：       │ │ 职责：       │ │ 职责：       │
-│ · 角色移动   │ │ · AI状态机   │ │ · 血条/气槽  │
-│ · 战斗执行   │ │ · 出招预兆   │ │ · 调试信息   │
-│ · 动画表现   │ │ · 出题策略   │ │              │
+│ · 输入仲裁路由│ │ · AI状态机   │ │ · 血条/气槽  │
+│   (状态机侧) │ │ · 出招预兆   │ │ · 调试信息   │
+│ · 角色移动   │ │ · 出题策略   │ │              │
+│ · 战斗执行   │ │              │ │              │
+│ · 动画表现   │ │              │ │              │
 └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
@@ -150,11 +101,17 @@ choice_project/
 玩家按键输入
     │
     ▼
-InputManager（仲裁：移动 or 战斗？）
+InputManager（全局采集：Current 位掩码快照 + Buffer 历史，不做仲裁）
     │
-    ├──→ PlayerController（移动指令）
+    ▼
+Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
     │
-    └──→ ComboSystem（战斗指令）
+    ├──→ MovementHandler（移动意图：moveAxis / 跳跃请求）
+    │         │
+    │         ▼
+    │    Player 物理积分（重力 + 意图 → MoveAndSlide，唯一调用点）
+    │
+    └──→ CombatHandler（择窗口 → 招式路由）
               │
               ▼
          HitboxManager（生成攻击判定）
@@ -171,25 +128,30 @@ InputManager（仲裁：移动 or 战斗？）
 
 ## 四、核心模块设计要点
 
-### 4.1 InputManager（输入仲裁）
+### 4.1 输入系统（InputManager + InputStateMachine）
 
-这是本项目技术风险最高的模块。
+这是本项目技术风险最高的模块。架构上分为两层（2026-08 决策，已实现）：
 
-**核心问题：** 方向键同时承担移动和搓招两个职责，需要一个状态机来仲裁。
+**InputManager（全局 Autoload，纯采集层）**
+- 每物理帧采样 Input Map 动作，压缩为 InputButtons 位掩码（Current/Previous）
+- 输入变化时生成 InputRecord 写入 Buffer（60 帧容量）；未变化时累加末条记录的 DurationFrames
+- 不含任何游戏逻辑、不知道玩家状态——同一帧内任何消费方读到的数据一致
+- 跳跃/闪避/格挡为系统键位（bit 8~10），与方向、攻击键分区隔离
 
-**状态设计：**
-- **Idle**：方向键 = 移动
-- **QuickAttack**：方向键 = 快速招式输入，不锁定移动
-- **Combo**：方向键 = 连招路由输入，锁定移动
-- **Charge**：方向键 = 锁定，蓄力中
+**InputStateMachine（Player 子节点，仲裁路由层）**
+- 不挂自己的 _PhysicsProcess，由 Player._PhysicsProcess 显式调用 Tick，保证帧内顺序：清意图 → 状态机路由 → 物理积分（MoveAndSlide 只在 Player 调用）
+- 持有当前活跃的 IInputReceiver，TransitionTo 统一执行 Exit → Enter，是所有状态切换的唯一入口
+- 全局触发器由状态机直接处理：攻击键按下边缘 → 进入战斗；闪避键按下边缘 → 无条件回到移动；UI 焦点闸门（GuiGetFocusOwner 非空时停止派发）
+- handler 引用在状态机的 _Ready 中注入（子节点 _Ready 先于父节点，handler 不得自行向上取引用）
+
+**状态与方向键职责：**
+- **MovementHandler（移动）**：方向键 = 移动，跳跃 = 独立键（空格），攻击键不在此处理
+- **CombatHandler（战斗）**：方向键 = 招式路由。攻击键开窗 → 首个方向输入提交路线 → 超时/闪避/不匹配则返回移动（窗口计时与路由逻辑为 Phase 1 实现内容）
 
 **关键参数（全部外部化配置，不硬编码）：**
-- 输入缓冲帧数
-- 状态切换延迟
-- 变招cancel窗口
-- 方向输入阈值
+- 择窗口帧数、输入缓冲帧数、状态切换延迟、变招cancel窗口、方向输入阈值
 
-**验证重点：** Phase 1 全力投入调校此模块手感，这是整个项目的地基。
+**验证重点：** Phase 1 全力投入调校窗口仲裁与路由的手感，这是整个项目的地基。
 
 ### 4.2 ComboSystem（连招系统）
 
@@ -280,9 +242,16 @@ InputManager（仲裁：移动 or 战斗？）
 | 11 | Git初始化 | .gitignore | 首次提交 |
 
 **完成标志：**
-- [ ] 角色在场景中跑、跳、落地手感自然
-- [ ] DebugOverlay正常显示输入状态
-- [ ] 项目可编译运行，Git仓库就绪
+- [x] 角色在场景中跑、跳、落地手感自然
+- [x] DebugOverlay正常显示输入状态
+- [x] 项目可编译运行，Git仓库就绪
+
+**Phase 0 回溯记录（2026-08-15）：**
+- GameManager、EventBus 未引入——当前没有场景管理与跨系统通信的实际需求，推迟到出现真实需求时再建，避免过早脚手架
+- 输入仲裁未按原计划放在 InputManager 内，改为 Player 侧 InputStateMachine，InputManager 降级为纯采集（详见 4.1）
+- 目录结构重构为当前实际形态（详见第二章）
+- 调试覆盖层由 scenes/ui/input_test/ 的输入历史面板承担（SF6 训练模式样式），帧率等监控项后续按需补充
+- 玩家移动控制采用"handler 写意图、Player 统一积分"模式，未使用原计划的 PlayerController 单脚本结构
 
 ---
 
@@ -292,11 +261,22 @@ InputManager（仲裁：移动 or 战斗？）
 
 **前置：招式设计与搓招表待定。** 本阶段先用临时招式（如：上/下/前/后各一个基础招式 + 2-3个临时连段）搭建框架，验证系统架构和手感。正式招式设计在Phase 1完成后、Phase 2开始前进行。
 
+**首要里程碑：战斗循环垂直切片**（2026-08-15 定，任务表展开前的先行工作）
+
+不做伤害与判定，先用最便宜的代价让"进入战斗 → 择方向 → 回到移动"的循环转起来：
+
+1. **攻击键触发切换**：状态机全局触发器检测攻击键按下边缘 → TransitionTo(CombatHandler)；Enter 时 Sprite 变色作为视觉标记，Exit 恢复
+2. **窗口计时与超时返回**：CombatHandler 开窗约30帧（首个手感参数），窗口内不写 moveAxis（移动自然刹住），归零返回移动状态
+3. **窗口内方向路由**：检测方向键按下边缘，首个非中立方向即"提交"，用临时 Label/颜色显示所选路线后关窗——择的骨架
+4. **闪避全局打断**：闪避键边缘优先于一切，任何状态下无条件返回移动；重点验证窗口内闪避可立即打断
+
+四步全部通过验收后，再展开下方任务表（hitbox/hurtbox、训练假人、真实判定与反馈）。
+
 | # | 任务 | 涉及文件 | 说明 |
 |---|------|---------|------|
-| 1 | 输入仲裁状态机 | Core/InputManager.cs | 实现Idle/QuickAttack/Combo/Charge四种状态及切换逻辑 |
-| 2 | 输入缓冲 | Core/InputManager.cs | 预输入窗口、输入序列缓存 |
-| 3 | 快速招式系统 | Player/PlayerCombat.cs | 方向+攻击键触发单段招式（临时4方向招式） |
+| 1 | 输入仲裁状态机 | scenes/characters/player/InputStateMachine.cs | 骨架已完成（handler路由、TransitionTo、UI闸门）；剩余：战斗窗口计时、攻击/闪避全局触发器 |
+| 2 | 输入缓冲 | core/InputManager.cs | 已完成：60帧Buffer + DurationFrames；剩余：战斗语境下的预读窗口调校 |
+| 3 | 快速招式系统 | scenes/characters/player/CombatHandler.cs | 方向+攻击键触发单段招式（临时4方向招式） |
 | 4 | 连招路由框架 | Combat/ComboSystem.cs | 路由树数据结构、输入匹配、节点流转 |
 | 5 | 变招（cancel）机制 | Combat/ComboSystem.cs | cancel窗口检测、连段中断与分支切换 |
 | 6 | 攻击判定 | Combat/HitboxManager.cs | 招式激活时生成攻击判定框 |
@@ -410,7 +390,7 @@ InputManager（仲裁：移动 or 战斗？）
 
 > **架构 → 实现 → 回溯 → 再规划**
 
-当前处于**架构期**。本文档已定义模块边界、职责划分和各阶段开发任务明细。
+当前处于 **Phase 1 实现期**（Phase 0 已于 2026-08-15 完成回溯）。本文档已定义模块边界、职责划分和各阶段开发任务明细，并随实现进展修订。
 
 **待定内容（需在开发中逐步填充）：**
 - 连招种类与搓招表（Phase 1完成后设计）
