@@ -35,6 +35,7 @@ project/assembly_name="choice_project"
 folder_colors={
 "res://core/": "red",
 "res://doc/": "gray",
+"res://resources/": "purple",
 "res://scenes/": "green",
 "res://scripts/": "pink"
 }

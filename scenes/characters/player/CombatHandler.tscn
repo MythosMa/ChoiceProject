@@ -1,7 +1,9 @@
 [gd_scene format=3 uid="uid://d288vuhp41h8p"]
 
 [ext_resource type="Script" uid="uid://b45ko8hyye7u1" path="res://scenes/characters/player/CombatHandler.cs" id="1_vama5"]
+[ext_resource type="Resource" uid="uid://cdipv2rrpubs5" path="res://resources/move/action_1.tres" id="2_hw6km"]
 
 [node name="CombatHandler" type="Node" unique_id=809220710]
 script = ExtResource("1_vama5")
+openerMove = ExtResource("2_hw6km")
 checkFrames = 60

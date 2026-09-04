@@ -1,6 +1,6 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.4  |  日期：2026-08-15  |  状态：Phase 0 完成，进入 Phase 1
+> 版本：v0.5  |  日期：2026-09-03  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
 
 ---
 
@@ -272,27 +272,53 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 
 四步全部通过验收后，再展开下方任务表（hitbox/hurtbox、训练假人、真实判定与反馈）。
 
-| # | 任务 | 涉及文件 | 说明 |
+> **进度（2026-09-03）：** 四步已全部实现并通过验收。闪避触发落在 InputStateMachine.Tick 中，排在攻击触发之前、带 `currentInputReceiver != movementHandler` 守卫（移动态按闪避不空转状态切换）。战斗态所有易变状态（连段计数、相位、倒计时、pending 攻击/方向）统一在 CombatHandler.Enter 重置——清理责任收敛在"入口"而非 Exit，闪避强退这条最野蛮的中断路径即为其压力测试。
+
+**已知问题（待接招式路由时处理）：**
+
+- **pending 方向归属错位**：CombatHandler 的 Listening 分支中，攻击判定位于最前，命中即 `AdvanceChain(); return;`，跑在方向标记消费（含 `_pendingDirection = Neutral` 重置）之前。因此存在一条边界路径——Showing 期存下 pending 方向 → 进 Listening → 同一帧既有该残留方向又按攻击 → 攻击赢并 return，pending 方向未被消费/清零，被带入新的 Showing 期，最终作为"路线标记"归到了**下一段**而非玩家实际按它的那一段。
+  - **当前影响**：方向标记仅为 `GD.Print` 日志，未接任何招式选择，属日志归属错位，不影响手感。
+  - **修复时机**：方向真正接入"路线→招式"路由时必须处理，否则会变成实际 bug。
+  - **修复方向**：攻击命中推进链时，先把当帧 tag（含 pending）绑定到**当前**这一击，再清 pending，而不是让攻击 return 绕过方向消费。
+
+**出招系统基础池（Phase 1 正式任务表，2026-09-03 重排，替换切片前的平铺表）**
+
+垂直切片证明了"输入→状态路由→循环"骨架能转。Phase 1 的实质是给骨架包肉：让招式有真实帧数据、攻击能真的打到、打中有体感。排序策略为**先深后宽**——先用一发真招打通全链路（tracer bullet），再横向铺开路由树；把最不确定、最影响手感的反馈环节优先验证，避免拖到最后返工。
+
+> **范围纪律：** 成品出招表（承载破招意义的完整 roster）押后到 Phase 1→2 交界、有对手可破之时再设计（详见 GAME_DESIGN §2.1.2）。Phase 1 只交付 substrate + 手感 + 出招表契约。**明确不做**：完整 roster、破招 payoff、敌人 AI、气槽/大招、正式美术动画。
+
+**支柱一 · 输入 → 输出效果的链路（先用一招打通脊柱）**
+
+| # | 任务 | 涉及位置 | 说明 |
 |---|------|---------|------|
-| 1 | 输入仲裁状态机 | scenes/characters/player/InputStateMachine.cs | 骨架已完成（handler路由、TransitionTo、UI闸门）；剩余：战斗窗口计时、攻击/闪避全局触发器 |
-| 2 | 输入缓冲 | core/InputManager.cs | 已完成：60帧Buffer + DurationFrames；剩余：战斗语境下的预读窗口调校 |
-| 3 | 快速招式系统 | scenes/characters/player/CombatHandler.cs | 方向+攻击键触发单段招式（临时4方向招式） |
-| 4 | 连招路由框架 | Combat/ComboSystem.cs | 路由树数据结构、输入匹配、节点流转 |
-| 5 | 变招（cancel）机制 | Combat/ComboSystem.cs | cancel窗口检测、连段中断与分支切换 |
-| 6 | 攻击判定 | Combat/HitboxManager.cs | 招式激活时生成攻击判定框 |
-| 7 | 受击判定 | Combat/HurtboxManager.cs | 角色受击区域管理 |
-| 8 | 伤害计算（基础） | Combat/DamageCalculator.cs | 基础伤害计算（确反加成逻辑留接口，本阶段不启用） |
-| 9 | 打击反馈 | Combat/FeedbackSystem.cs | 顿帧、屏幕震动、击退位移 |
-| 10 | 反馈配置 | Core/Config/FeedbackConfig.tres | 各招式反馈参数可调 |
-| 11 | 招式配置框架 | 待定 | 招式数据Resource结构定义（具体招式内容待定） |
-| 12 | 训练假人 | Scenes/TestArena.tscn | 场景中放一个不动的假人，用于测试攻击判定和反馈 |
-| 13 | 手感调校 | Core/Config/*.tres | 反复调整输入缓冲、状态切换延迟、cancel窗口、招式帧数 |
+| 1 | MoveData 帧数据契约 | 招式数据 Resource（.tres） | 前摇/活跃/后摇帧数 + hitbox 形状偏移 + 伤害 + hitstop 帧 + 击退力度；cancelability 留**可选字段不接线**。字段表由"打通一招"的过程逼出，不预先抽象设计 |
+| 2 | CombatHandler 帧数据驱动 | scenes/characters/player/CombatHandler.cs | 用 MoveData 三段（Startup→Active→Recovery）替换占位 showFrames；保留帧计数器原则；择窗口（Listening）维持独立 tick 计时，**不绑死到招式帧** |
+| 3 | Hitbox / Hurtbox 组件 | 共享战斗组件（**不置于 player/ 下**） | Hitbox=Area2D 仅活跃帧 monitoring；Hurtbox=Area2D 受击区。具体路径开发中定，敌人将来复用 |
+| 4 | DamageCalculator（基础） | 共享战斗系统 | 重叠→扣血；确反加成留接口**不启用** |
+| 5 | 训练假人 | 测试场景 | 带 Hurtbox + HP 的静态目标，命中可观察（HP 变化 / 受击变色） |
+
+**支柱二 · 连段时机（横向铺开路由）**
+
+| # | 任务 | 涉及位置 | 说明 |
+|---|------|---------|------|
+| 6 | ComboSystem 路由树 | 共享战斗系统 | 树结构：节点=一招，边=输入（方向+攻击）；把现有线性 chain 计数改为在树上走节点 |
+| 7 | 临时 4 方向招式 | 招式数据 Resource | 上/下/前/后各一 MoveData，挂成树第一层，验证方向路由真的选到不同招。脚手架性质，held loosely |
+| 8 | 变招 cancel 机制 | ComboSystem | cancel 窗口内允许切分支。**Phase 1 仅留机制接口，payoff 验证属 Phase 2** |
+
+**支柱三 · 手感（打击反馈）**
+
+| # | 任务 | 涉及位置 | 说明 |
+|---|------|---------|------|
+| 9 | FeedbackSystem | 共享战斗系统 | 命中触发 hitstop + 震屏 + 击退。hitstop 用**帧计数器冻结 tick**（不用 Engine.time_scale），与状态切换计时同一时钟 |
+| 10 | 反馈/手感参数外部化 | 配置 Resource（.tres） | 顿帧帧数、震屏强度时长、击退力度、招式帧数、cancel 窗口、输入缓冲均可调，不硬编码 |
+| 11 | 手感调校 + 阶段验收 | — | 反复调校，对照下方完成标志逐项打分 |
 
 **完成标志：**
 - [ ] 移动中出招不卡顿，状态切换自然
-- [ ] 连段可搓出来，中途可cancel变招
-- [ ] 打到假人有明显的打击感（顿帧+震动+击退）
-- [ ] 连续操作5分钟不觉疲惫
+- [ ] 一发真招打通全链路：帧数据驱动 → 活跃帧 hitbox → 命中假人 → 伤害 + 反馈
+- [ ] 连段可搓出来，方向路由选到不同招；cancel 机制接口就位
+- [ ] 打到假人有明显打击感（顿帧 + 震动 + 击退）
+- [ ] 连续操作 5 分钟不觉疲惫
 
 ---
 
