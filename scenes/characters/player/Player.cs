@@ -16,6 +16,10 @@ public partial class Player : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
+		if (FeedbackSystem.Instance.ConsumeHitstop())
+		{
+			return;
+		}
 		moveAxis = 0;
 		jumpRequested = false;
 

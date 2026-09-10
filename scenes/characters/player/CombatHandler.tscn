@@ -2,8 +2,16 @@
 
 [ext_resource type="Script" uid="uid://b45ko8hyye7u1" path="res://scenes/characters/player/CombatHandler.cs" id="1_vama5"]
 [ext_resource type="Resource" uid="uid://cdipv2rrpubs5" path="res://resources/move/action_1.tres" id="2_hw6km"]
+[ext_resource type="Resource" uid="uid://cfhwmvvdpe12k" path="res://resources/move/move_up.tres" id="3_0a0py"]
+[ext_resource type="Resource" uid="uid://b5spxhh2tnkvx" path="res://resources/move/move_down.tres" id="4_ibri4"]
+[ext_resource type="Resource" uid="uid://dbtsu4xml2w2h" path="res://resources/move/move_left.tres" id="5_bn634"]
+[ext_resource type="Resource" uid="uid://cr4g4kp3ulu74" path="res://resources/move/move_right.tres" id="6_v057a"]
 
 [node name="CombatHandler" type="Node" unique_id=809220710]
 script = ExtResource("1_vama5")
 openerMove = ExtResource("2_hw6km")
+moveUp = ExtResource("3_0a0py")
+moveDown = ExtResource("4_ibri4")
+moveLeft = ExtResource("5_bn634")
+moveRight = ExtResource("6_v057a")
 checkFrames = 60

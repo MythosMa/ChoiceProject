@@ -21,6 +21,8 @@ public partial class MoveData : Resource
     [Export]
     public int hitstopFrames = 6; // 命中僵直帧数
     [Export]
+    public float shakeMagnitude = 8f; // 命中震屏强度
+    [Export]
     public Vector2 knockback = Vector2.Zero; // 击退力度
 
     [ExportGroup("攻击判定")]

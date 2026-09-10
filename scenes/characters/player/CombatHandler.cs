@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Net.Sockets;
 
 public partial class CombatHandler : Node, IInputReceiver
 {
@@ -9,8 +10,19 @@ public partial class CombatHandler : Node, IInputReceiver
 	[Export]
 	public MoveData openerMove;
 
+	[Export]
+	public MoveData moveUp;
+
+	[Export]
+	public MoveData moveDown;
+
+	[Export]
+	public MoveData moveLeft;
+
+	[Export]
+	public MoveData moveRight;
+
 	[Export] public int checkFrames = 30; // 每环节监听窗口
-	[Export] public int showFrames = 12;  // 每击展示帧数（占位，将来=招式帧数据）
 	[Export] public int chainCap = 3;     // 占位最大链长
 
 	private Phase _phase;
@@ -18,6 +30,7 @@ public partial class CombatHandler : Node, IInputReceiver
 	private int _frameInMove;
 	private int _chainHits;
 	private int _counter;
+	private Hitbox _hitbox;
 
 	// Showing 期预输入暂存
 	private bool _pendingAttack;
@@ -30,30 +43,32 @@ public partial class CombatHandler : Node, IInputReceiver
 	{
 		player = node;
 		inputStateMachine = machine;
+		_hitbox = player.GetNode<Hitbox>("Hitbox");
 	}
 
 	public void Enter()
 	{
-		// 开窗按下 = 第 1 击，立刻出招
 		_chainHits = 1;
-		StartMove(openerMove);
+		_pendingAttack = false;
+		_pendingDirection = Direction.Neutral;
+		Direction dir = Tools.GetDirection(InputManager.Instance.Current);
+		StartMove(SelectMove(dir));
 
-		_counter = showFrames;
-		// 同帧方向边缘 = 首击路线（快速招式语义；按住不放的方向不算）
-		InputManager input = InputManager.Instance;
-		InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
-		if ((pressed & InputButtons.DirectionMask) != InputButtons.None)
-		{
-			Direction dir = Tools.GetDirection(input.Current);
-			if (dir != Direction.Neutral)
-			{
-				GD.Print($"首击路线：{Tools.GetDirectionArrow(dir)}");
-			}
-		}
+		// InputManager input = InputManager.Instance;
+		// InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
+		// if ((pressed & InputButtons.DirectionMask) != InputButtons.None)
+		// {
+		// 	Direction dir = Tools.GetDirection(input.Current);
+		// 	if (dir != Direction.Neutral)
+		// 	{
+		// 		GD.Print($"首击路线：{Tools.GetDirectionArrow(dir)}");
+		// 	}
+		// }
 	}
 
 	public void Exit()
 	{
+		_hitbox.SetActive(false);
 		SetVisual(Colors.White);
 	}
 
@@ -72,14 +87,10 @@ public partial class CombatHandler : Node, IInputReceiver
 	private void AdvanceChain()
 	{
 		_chainHits++;
-		StartMove(openerMove);
+		Direction dir = ResolveAttackDirection();
+		StartMove(SelectMove(dir));
 	}
 
-
-	private void SetVisual(Color color)
-	{
-		player.GetNode<Sprite2D>("Sprite2D").Modulate = color;
-	}
 
 	private void StartMove(MoveData move)
 	{
@@ -94,9 +105,12 @@ public partial class CombatHandler : Node, IInputReceiver
 		_pendingAttack = false;
 		_pendingDirection = Direction.Neutral;
 
+		_hitbox.Configure(move);
+
 
 		GD.Print($"连段第 {_chainHits} 击: {move.moveName}");
 		ApplySegmentVisual();
+		SyncHitbox();
 	}
 
 	private void TickPlaying(double delta)
@@ -106,6 +120,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		_frameInMove++;
 		if (_frameInMove >= _move.TotalFrames)
 		{
+			_hitbox.SetActive(false);
 			if (_chainHits < chainCap)
 			{
 				_phase = Phase.Listening;
@@ -118,8 +133,13 @@ public partial class CombatHandler : Node, IInputReceiver
 			}
 			return;
 		}
-
+		SyncHitbox();
 		ApplySegmentVisual();
+	}
+
+	private void SyncHitbox()
+	{
+		_hitbox.SetActive(CurrentSegment() == Segment.Active);
 	}
 
 	private void TickListening(double delta)
@@ -128,24 +148,18 @@ public partial class CombatHandler : Node, IInputReceiver
 		InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
 		if (_pendingAttack || (pressed & InputButtons.AttackMask) != InputButtons.None)
 		{
-			_pendingAttack = false;
 			AdvanceChain();
 			return;
 		}
 
-		Direction dir = _pendingDirection;
 		if ((pressed & InputButtons.DirectionMask) != InputButtons.None)
 		{
 			Direction current = Tools.GetDirection(input.Current);
 			if (current != Direction.Neutral)
 			{
-				dir = current;
+				_pendingDirection = current;
+				GD.Print($"路线标记：{Tools.GetDirectionArrow(_pendingDirection)}");
 			}
-		}
-		_pendingDirection = Direction.Neutral;
-		if (dir != Direction.Neutral)
-		{
-			GD.Print($"路线标记：{Tools.GetDirectionArrow(dir)}");
 		}
 
 		_counter--;
@@ -205,4 +219,30 @@ public partial class CombatHandler : Node, IInputReceiver
 				break;
 		}
 	}
+
+	private void SetVisual(Color color)
+	{
+		player.GetNode<Sprite2D>("Sprite2D").Modulate = color;
+	}
+
+	private MoveData SelectMove(Direction dir)
+	{
+		MoveData m = dir switch
+		{
+			Direction.Up => moveUp,
+			Direction.Down => moveDown,
+			Direction.Left => moveLeft,
+			Direction.Right => moveRight,
+			_ => openerMove,
+		};
+
+		return m ?? openerMove;
+	}
+
+	private Direction ResolveAttackDirection()
+	{
+		Direction now = Tools.GetDirection(InputManager.Instance.Current);
+		return now != Direction.Neutral ? now : _pendingDirection;
+	}
+
 }

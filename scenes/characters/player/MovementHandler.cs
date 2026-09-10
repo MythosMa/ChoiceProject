@@ -34,7 +34,6 @@ public partial class MovementHandler : Node, IInputReceiver
 		player.moveAxis = axis;
 
 		bool jumpJustPressed = Tools.GetPressed(input.Previous, input.Current).HasFlag(InputButtons.Jump);
-		GD.Print("Jump just pressed: " + jumpJustPressed);
 		if (jumpJustPressed && player.IsOnFloor())
 		{
 			player.RequestJump();

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="MoveData" format=3 uid="uid://cfhwmvvdpe12k"]
+
+[ext_resource type="Script" uid="uid://duwjwvk4spb8q" path="res://scripts/data/MoveData.cs" id="1_gl4th"]
+
+[resource]
+script = ExtResource("1_gl4th")
+moveName = "move_up"
+damage = 5
+hitboxOffset = Vector2(0, -100)
+hitboxSize = Vector2(20, 20)
+metadata/_custom_type_script = "uid://duwjwvk4spb8q"

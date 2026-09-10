@@ -1,6 +1,6 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.5  |  日期：2026-09-03  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
+> 版本：v0.10  |  日期：2026-09-03  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
 
 ---
 
@@ -186,6 +186,19 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 
 **关键设计：** 最优确反的反馈强度要明显高于普通命中，让玩家能通过体感区分"择对了"和"只是打到了"。
 
+> **实现进度（2026-09-03）：** A4-1 顿帧、A4-2 震屏已落地并验收。FeedbackSystem 作为全局 Autoload 引入（`core/FeedbackSystem.cs`，单例样板同 InputManager），承载 hitstop + shake。
+> - **顿帧机制：** 命中（`Hitbox.OnAreaEntered`）→ `RequestHitstop(move.hitstopFrames)`；`Player._PhysicsProcess` 顶部 `ConsumeHitstop()` 返回 true 即 `return` 冻结整帧（不清意图、不派发 tick、不积分）。**用帧计数器递减，不用 `Engine.time_scale`**，与状态切换/招式帧同一时钟。多次请求取较大帧数，避免短顿帧打断长顿帧。
+> - **震屏机制：** 命中 → `RequestShake(move.hitstopFrames, move.shakeMagnitude)`（时长暂复用 hitstopFrames，强度走 MoveData 字段）；由 **FeedbackSystem 自己的 `_PhysicsProcess`** 驱动相机 `Offset`——不在 Player tick 内，故顿帧冻结玩家时相机照常抖（定格 + 抖动同步 = 打击感）。强度随剩余帧线性衰减，收尾帧复位 `Offset = Zero` 防画面卡偏；用 `Offset` 不用 `Position`，将来相机跟随玩家时互不干扰。相机经 `GetViewport().GetCamera2D()` 动态获取，免去挂脚本 + 注册。测试场景已加 Camera2D（固定摆位，仅验证震屏，未做跟随）。
+> - **命中结算位置：** 伤害 + 顿帧 + 震屏暂时直接在 Hitbox 内结算（同 A3 直接 TakeDamage），将来可抽到 CombatSystem/EventBus，Phase 1 不引入。
+> - **未做（击退）：** 押后到**多招系统（支柱二）之后**再做。理由：① 击退是**招式差异化反馈**——不同招应给出不同击退（力度/方向/是否浮空等），单招阶段做体现不出差异、也没有验证载体；② 静态假人（Node2D，不走物理）表现不出位移。故顺序为：先支柱二多招 → 再 A4-3 击退（届时受击者大概率已是可位移敌人）。
+
+### 4.5 实现约定
+
+- **可复用组件的形状 = 编辑器预设 + 本地到场景（Local To Scene），不用代码 new。** Hitbox/Hurtbox 的 CollisionShape2D 形状在编辑器里预设（RectangleShape2D 等），并对**资源本身**勾选"本地到场景"（Inspector 选中 Shape 资源 → 勾选 `本地到场景 / Local To Scene`），使其按实例自动复制、互不共享。
+  - **为什么：** Godot 的 .tscn 内联 sub_resource 默认被所有场景实例共享——改一个 size 会影响全部。代码里 `_rect.Size = x` 若不加"本地到场景"，等于在改所有实例共用的同一份形状。
+  - **为什么不用代码 new：** 未来不同敌人需要**手编辑**的判定形状（尺寸/偏移各异），"编辑器预设 + 本地到场景"既保证可手编、又消除共享，优于运行时 `new RectangleShape2D()`。
+  - 运行时代码只**读取/微调**预设形状（如按 MoveData 覆盖 size/offset），不负责创建。
+
 ---
 
 ## 五、事件总线（EventBus）
@@ -274,12 +287,10 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 
 > **进度（2026-09-03）：** 四步已全部实现并通过验收。闪避触发落在 InputStateMachine.Tick 中，排在攻击触发之前、带 `currentInputReceiver != movementHandler` 守卫（移动态按闪避不空转状态切换）。战斗态所有易变状态（连段计数、相位、倒计时、pending 攻击/方向）统一在 CombatHandler.Enter 重置——清理责任收敛在"入口"而非 Exit，闪避强退这条最野蛮的中断路径即为其压力测试。
 
-**已知问题（待接招式路由时处理）：**
+**已修复（2026-09-03，随支柱二方向选招一并处理）：**
 
-- **pending 方向归属错位**：CombatHandler 的 Listening 分支中，攻击判定位于最前，命中即 `AdvanceChain(); return;`，跑在方向标记消费（含 `_pendingDirection = Neutral` 重置）之前。因此存在一条边界路径——Showing 期存下 pending 方向 → 进 Listening → 同一帧既有该残留方向又按攻击 → 攻击赢并 return，pending 方向未被消费/清零，被带入新的 Showing 期，最终作为"路线标记"归到了**下一段**而非玩家实际按它的那一段。
-  - **当前影响**：方向标记仅为 `GD.Print` 日志，未接任何招式选择，属日志归属错位，不影响手感。
-  - **修复时机**：方向真正接入"路线→招式"路由时必须处理，否则会变成实际 bug。
-  - **修复方向**：攻击命中推进链时，先把当帧 tag（含 pending）绑定到**当前**这一击，再清 pending，而不是让攻击 return 绕过方向消费。
+- **pending 方向归属错位**（原"已知问题"）：旧 Listening 分支中攻击判定位于最前、命中即 `AdvanceChain(); return;`，跑在方向消费之前，残留 pending 方向会被带入下一段。方向一旦接入选招，这就从"日志错位"升级为"选错招"的真 bug，故在支柱二第一步一并修复。
+  - **修复方式**：方向解析并入 `AdvanceChain` → `ResolveAttackDirection()`（当帧持续方向 `Current` 优先、中立则取出招期 `pending`），先绑定到**当前这一击**再 `StartMove`（其内部清 pending），攻击触发不再绕过方向消费。`TickListening` 无攻击分支改为把方向边缘**存入** pending（预输入下一招），而非旧版 print 后清零。
 
 **出招系统基础池（Phase 1 正式任务表，2026-09-03 重排，替换切片前的平铺表）**
 
@@ -297,6 +308,11 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 | 4 | DamageCalculator（基础） | 共享战斗系统 | 重叠→扣血；确反加成留接口**不启用** |
 | 5 | 训练假人 | 测试场景 | 带 Hurtbox + HP 的静态目标，命中可观察（HP 变化 / 受击变色） |
 
+> **进度（2026-09-03）：**
+> - 任务 1–2（MoveData 帧数据契约 + CombatHandler 帧驱动播放）**已完成**：三段 Startup/Active/Recovery 由帧计数器驱动，色块分段可视化（暗红/亮橙/灰）；择窗口（Listening）保持独立 tick 计时、未绑死招式帧。
+> - 任务 3（Hitbox/Hurtbox 组件）**已完成并验证**：Hitbox=Area2D 仅活跃帧 monitoring（CollisionShape2D.Disabled 切换），Hurtbox=Area2D（monitoring=false / monitorable=true），命中经 hitbox 的 `area_entered` 信号 + `is Hurtbox` 过滤，已打到训练假人。
+> - 任务 4–5（伤害 / 训练假人）**进行中**：引入 `IDamageable` 接口（`void TakeDamage(int amount)`），假人挂 HP + 受击闪红。**DamageCalculator 抽象推迟**——本步直接 `TakeDamage(move.damage)`，不建独立计算器；任务 4 的"确反加成留接口不启用"随之押后到 Phase 2 真要做确反倍率/最优确反时再引入。
+
 **支柱二 · 连段时机（横向铺开路由）**
 
 | # | 任务 | 涉及位置 | 说明 |
@@ -304,6 +320,11 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 | 6 | ComboSystem 路由树 | 共享战斗系统 | 树结构：节点=一招，边=输入（方向+攻击）；把现有线性 chain 计数改为在树上走节点 |
 | 7 | 临时 4 方向招式 | 招式数据 Resource | 上/下/前/后各一 MoveData，挂成树第一层，验证方向路由真的选到不同招。脚手架性质，held loosely |
 | 8 | 变招 cancel 机制 | ComboSystem | cancel 窗口内允许切分支。**Phase 1 仅留机制接口，payoff 验证属 Phase 2** |
+
+> **进度（2026-09-03）：**
+> - 任务 7（临时多方向招式）+ 任务 6 最小版**已完成并验证**：CombatHandler 加 `moveUp/Down/Left/Right` 四个 `[Export]` 槽 + `SelectMove(Direction)`，首击（`Enter`）与连段（`AdvanceChain`）均按方向选招，未配方向 / 中立 / 对角回落 `openerMove`。4 个临时 `.tres`（不同 hitboxOffset/Size/damage/moveName）验证"方向真的选到不同招"。
+> - **方向语义**：第一步用**绝对方向**（Up/Down/Left/Right），不做面向相对的"前/后"——当前无面向翻转系统，"前/后"留到对敌（Phase 2）。选招方向取**攻击触发瞬间的持续方向**（`Current` 优先、中立 fallback 出招期 `pending`），兼容"按住方向再按攻击"与"出招动画中预拨方向"两种输入。
+> - **未做**：任务 6 完整 **ComboSystem 路由树**（带连段路径依赖，如 ↓↘→+拳）——第一步只是"方向→招"直接映射（`switch`，held loosely），等招式变多、需要路径输入时再上树；任务 8（cancel 接口）未做，与树耦合（cancel = 树上切分支），倾向同正式连招表一起在 Phase 1→2 交界处理。
 
 **支柱三 · 手感（打击反馈）**
 
@@ -313,11 +334,20 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 | 10 | 反馈/手感参数外部化 | 配置 Resource（.tres） | 顿帧帧数、震屏强度时长、击退力度、招式帧数、cancel 窗口、输入缓冲均可调，不硬编码 |
 | 11 | 手感调校 + 阶段验收 | — | 反复调校，对照下方完成标志逐项打分 |
 
+> **进度（2026-09-03）：**
+> - 任务 9（FeedbackSystem）：顿帧、震屏已实现并验收，FeedbackSystem 以 Autoload 落地（机制详见 §4.4）。击退押后到**多招系统（支柱二）之后**——击退是招式差异化反馈，需多招才有验证载体（理由详见 §4.4）。
+> - 任务 10（参数外部化）：`hitstopFrames`、`shakeMagnitude` 已在 MoveData 上可调（Inspector 改 openerMove 资源），尚未抽 FeedbackConfig.tres。
+>
+> **已知调校项（顿帧引入）：**
+> - **顿帧可能吞连段输入**：顿帧冻结 Player tick，但 InputManager（独立 Autoload）照常采集；而 InputStateMachine 用 `GetPressed(Previous, Current)` **单帧边缘**检测攻击。顿帧 >1 帧时，期间按下的攻击键在顿帧结束后 Previous/Current 都为"按着"→ 无边缘 → 触发被吞。`InputManager.Buffer(60)` 正是为此预留但尚未接线。
+>   - **当前态度**：A4-1 先用单帧边缘跑通，不修。
+>   - **处理时机**：任务 11 手感调校时实测——若连段偶发接不上变明显，让 InputStateMachine 改用 Buffer 在顿帧结束帧补检测攻击边缘。
+
 **完成标志：**
 - [ ] 移动中出招不卡顿，状态切换自然
 - [ ] 一发真招打通全链路：帧数据驱动 → 活跃帧 hitbox → 命中假人 → 伤害 + 反馈
 - [ ] 连段可搓出来，方向路由选到不同招；cancel 机制接口就位
-- [ ] 打到假人有明显打击感（顿帧 + 震动 + 击退）
+- [ ] 打到假人有明显打击感（顿帧 + 震动；击退随多招系统后补，见 §4.4）
 - [ ] 连续操作 5 分钟不觉疲惫
 
 ---

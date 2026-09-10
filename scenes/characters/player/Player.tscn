@@ -3,9 +3,12 @@
 [ext_resource type="Script" uid="uid://dy48rl1ge50i1" path="res://scenes/characters/player/Player.cs" id="1_b7oxf"]
 [ext_resource type="Texture2D" uid="uid://qkaroutfnxm" path="res://assets/textures/white.png" id="1_db84v"]
 [ext_resource type="PackedScene" uid="uid://bw75oe02vbxvo" path="res://scenes/characters/player/InputStateMachine.tscn" id="2_c12fh"]
+[ext_resource type="PackedScene" uid="uid://dqillv5arvmal" path="res://scenes/combat/components/Hitbox.tscn" id="4_7xy7u"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_srvkq"]
 size = Vector2(16, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_i1vam"]
 
 [node name="Player" type="CharacterBody2D" unique_id=1416864205 node_paths=PackedStringArray("inputStateMachine")]
 script = ExtResource("1_b7oxf")
@@ -19,3 +22,11 @@ shape = SubResource("RectangleShape2D_srvkq")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1111402596]
 texture = ExtResource("1_db84v")
+
+[node name="Hitbox" parent="." unique_id=835786613 instance=ExtResource("4_7xy7u")]
+
+[node name="CollisionShape2D" parent="Hitbox" index="0" unique_id=2128622986]
+shape = SubResource("RectangleShape2D_i1vam")
+
+[editable path="InputStateMachine"]
+[editable path="Hitbox"]

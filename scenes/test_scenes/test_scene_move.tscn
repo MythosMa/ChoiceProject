@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://c85on18pc2whp"]
 
+[ext_resource type="PackedScene" uid="uid://cycgjvafvoc7l" path="res://scenes/characters/enemy/training_dummy/training_dummy.tscn" id="1_vqw25"]
 [ext_resource type="PackedScene" uid="uid://buexogmyqp6gq" path="res://scenes/characters/player/Player.tscn" id="2_vqw25"]
+[ext_resource type="Script" uid="uid://duwjwvk4spb8q" path="res://scripts/data/MoveData.cs" id="3_nxk1p"]
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_vqw25"]
 load_path = "res://.godot/imported/white.png-5a24addff47c5cf030d8933848d133b0.ctex"
@@ -19,6 +21,15 @@ load_path = "res://.godot/imported/white.png-5a24addff47c5cf030d8933848d133b0.ct
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_315dr"]
 size = Vector2(2240, 480)
+
+[sub_resource type="Resource" id="Resource_i1vam"]
+script = ExtResource("3_nxk1p")
+moveName = "action_1"
+hitboxOffset = Vector2(100, 0)
+hitboxSize = Vector2(200, 20)
+metadata/_custom_type_script = "uid://duwjwvk4spb8q"
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_0tqcn"]
 
 [node name="TestSceneDefault" type="Node2D" unique_id=575392864]
 
@@ -64,3 +75,19 @@ shape = SubResource("RectangleShape2D_315dr")
 
 [node name="Player" parent="." unique_id=1416864205 instance=ExtResource("2_vqw25")]
 position = Vector2(524, 431)
+
+[node name="CombatHandler" parent="Player/InputStateMachine" parent_id_path=PackedInt32Array(1416864205, 1868557808) index="1" unique_id=809220710]
+openerMove = SubResource("Resource_i1vam")
+
+[node name="CollisionShape2D" parent="Player/Hitbox" parent_id_path=PackedInt32Array(1416864205, 835786613) index="0" unique_id=2128622986]
+shape = SubResource("RectangleShape2D_0tqcn")
+
+[node name="TrainingDummy" parent="." unique_id=1294550708 instance=ExtResource("1_vqw25")]
+position = Vector2(680, 690)
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1764261495]
+position = Vector2(600, 550)
+
+[editable path="Player"]
+[editable path="Player/InputStateMachine"]
+[editable path="Player/Hitbox"]
