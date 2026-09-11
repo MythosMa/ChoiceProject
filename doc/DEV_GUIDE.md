@@ -1,6 +1,6 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.10  |  日期：2026-09-03  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
+> 版本：v0.11  |  日期：2026-09-11  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
 
 ---
 
@@ -146,7 +146,7 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 
 **状态与方向键职责：**
 - **MovementHandler（移动）**：方向键 = 移动，跳跃 = 独立键（空格），攻击键不在此处理
-- **CombatHandler（战斗）**：方向键 = 招式路由。攻击键开窗 → 首个方向输入提交路线 → 超时/闪避/不匹配则返回移动（窗口计时与路由逻辑为 Phase 1 实现内容）
+- **CombatHandler（战斗）**：方向键 = 招式路由。攻击键边缘进入战斗 → 按 MoveData 帧数据播放招式（Startup→Active→Recovery）→ **播放结束帧立即二选一**：有预输入攻击且未达链长上限则无缝接续下一段，否则即刻 `TransitionTo(movementHandler)` 还移动，**无独立 Listening 空窗**（切片期"开窗约30帧、超时返回"模型已于 2026-09-11 移除，见 §七 手感修复）。闪避边缘始终优先，可即时中断播放。
 
 **关键参数（全部外部化配置，不硬编码）：**
 - 择窗口帧数、输入缓冲帧数、状态切换延迟、变招cancel窗口、方向输入阈值
@@ -342,6 +342,18 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 > - **顿帧可能吞连段输入**：顿帧冻结 Player tick，但 InputManager（独立 Autoload）照常采集；而 InputStateMachine 用 `GetPressed(Previous, Current)` **单帧边缘**检测攻击。顿帧 >1 帧时，期间按下的攻击键在顿帧结束后 Previous/Current 都为"按着"→ 无边缘 → 触发被吞。`InputManager.Buffer(60)` 正是为此预留但尚未接线。
 >   - **当前态度**：A4-1 先用单帧边缘跑通，不修。
 >   - **处理时机**：任务 11 手感调校时实测——若连段偶发接不上变明显，让 InputStateMachine 改用 Buffer 在顿帧结束帧补检测攻击边缘。
+
+**手感修复 + 可行性回顾（2026-09-11）**
+
+> **卡手修复（删除"死窗口"）：** 切片期 CombatHandler 在招式播放结束后进入约 30 帧 `Listening` 窗口干等连段输入，期间角色钉在原地——这是"战斗↔移动"切换卡手的**根因（非播放锁定本身）**。已移除 `Listening` 相位与 `checkFrames`/`_counter`/`AdvanceChain`，改为：`TickPlaying` 在播放结束帧直接判定——有预输入攻击（`_pendingAttack`，播放期由 `CapturePending` 暂存）且未达 `chainCap` 则 `StartMove(ResolveNext())` 无缝接续，否则立即 `TransitionTo(movementHandler)`，**零空窗还移动**。连段计数折进 `TickPlaying`。
+> - **每招移动锁定数据化：** `MoveData` 新增 `lockMovement`（默认 `true`）。"播放期是否锁走位"从全局架构决策**下沉为每招的数据属性**——绝大多数招锁定，少数快速招可设 `false` 实现"边走边打"。
+>   - **当前落实范围：** 仅"锁定"路径生效（战斗态本就不写 `moveAxis`）。`!lockMovement` 的播放中走位仍是 **TODO**——`TickPlaying` 内对应分支体为空、且条件写成了 `if (_move.lockMovement)`（应为 `!_move.lockMovement`），待接 `ReadHorizontalAxis`（抄 movementHandler 读水平轴那段）。因所有招默认 `true`，暂不阻塞手感。
+> - **GAME_DESIGN §3.1 同步校准：** 快速招式层原写"不锁定移动，随时可以走位"，已校准为"播放极短、结束即还移动、无死窗口；播放期是否锁定由每招 `lockMovement` 决定"。
+
+> **可行性回顾结论（第一次）：** 本轮一度计划引入"序列匹配器（`MoveResolver`）+ →↓↘ / →↘↓ 两条易串测试搓招"做"架构兼容性验证、避免后续 rework"。经对照 GAME_DESIGN §2.1.1 / §9.2 判定为**漂移信号并已叫停**：
+> - **判据：** 选这两条指令的理由是"街霸里容易串招、可拿来调手感"——而调校近似指令的串招区分度本质是**执行层（手指精度）工作**，命中 §9.2 自查信号"想的是'这招没按出来'而非'该不该用'"；且序列匹配器与已押后的 task 6（路由树）/ task 8（cancel）同属"在知道出招表前先建路由"，违背同一纪律。"避免 rework"的动机也被高估：现 `SelectMove` 的 `switch` 本就 held loosely，将来换序列匹配是增量替换。
+> - **更深的可行性结论：** 按 §2.1.2，**择 = 破招，payoff（造成伤害 / 避免伤害）需对手**；Phase 1 无敌人 → **结构上无法验证"择"**。故 Phase 1 的健康姿态是"substrate 够用即止、手感做到位"，**不在执行层精雕**，尽快推进到 Phase 2 第一个会出题的敌人——那是本项目第一次能真正回答"择成不成立"。
+> - **处置：** 序列 / 搓招匹配器押后到 Phase 1→2 交界，与正式出招表、task 6 / task 8 一并设计。`InputManager.Buffer(60)` 维持预留、不接线。
 
 **完成标志：**
 - [ ] 移动中出招不卡顿，状态切换自然

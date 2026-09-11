@@ -4,7 +4,6 @@ using System.Net.Sockets;
 
 public partial class CombatHandler : Node, IInputReceiver
 {
-	private enum Phase { Listening, Playing }
 	private enum Segment { Startup, Active, Recovery }
 
 	[Export]
@@ -22,19 +21,15 @@ public partial class CombatHandler : Node, IInputReceiver
 	[Export]
 	public MoveData moveRight;
 
-	[Export] public int checkFrames = 30; // 每环节监听窗口
 	[Export] public int chainCap = 3;     // 占位最大链长
 
-	private Phase _phase;
 	private MoveData _move;
 	private int _frameInMove;
 	private int _chainHits;
-	private int _counter;
 	private Hitbox _hitbox;
 
 	// Showing 期预输入暂存
-	private bool _pendingAttack;
-	private Direction _pendingDirection = Direction.Neutral;
+	private int _moveStartInputId = -1;
 
 	public Player player { get; set; }
 	public InputStateMachine inputStateMachine { get; set; }
@@ -49,8 +44,6 @@ public partial class CombatHandler : Node, IInputReceiver
 	public void Enter()
 	{
 		_chainHits = 1;
-		_pendingAttack = false;
-		_pendingDirection = Direction.Neutral;
 		Direction dir = Tools.GetDirection(InputManager.Instance.Current);
 		StartMove(SelectMove(dir));
 
@@ -74,21 +67,7 @@ public partial class CombatHandler : Node, IInputReceiver
 
 	public void Tick(double delta)
 	{
-		if (_phase == Phase.Playing)
-		{
-			TickPlaying(delta);
-		}
-		else
-		{
-			TickListening(delta);
-		}
-	}
-
-	private void AdvanceChain()
-	{
-		_chainHits++;
-		Direction dir = ResolveAttackDirection();
-		StartMove(SelectMove(dir));
+		TickPlaying(delta);
 	}
 
 
@@ -101,31 +80,38 @@ public partial class CombatHandler : Node, IInputReceiver
 		}
 		_move = move;
 		_frameInMove = 0;
-		_phase = Phase.Playing;
-		_pendingAttack = false;
-		_pendingDirection = Direction.Neutral;
-
 		_hitbox.Configure(move);
 
 
 		GD.Print($"连段第 {_chainHits} 击: {move.moveName}");
 		ApplySegmentVisual();
 		SyncHitbox();
+
+		_moveStartInputId = LastInputId();
+	}
+
+	private int LastInputId()
+	{
+		var buffer = InputManager.Instance.Buffer;
+		return buffer.Count > 0 ? buffer[^1].Id : -1;
 	}
 
 	private void TickPlaying(double delta)
 	{
-		CapturePending();
+		if (_move != null && !_move.lockMovement)
+		{
+			// todo: 动作演出时不锁定移动的处理逻辑
+		}
 
 		_frameInMove++;
 		if (_frameInMove >= _move.TotalFrames)
 		{
 			_hitbox.SetActive(false);
-			if (_chainHits < chainCap)
+			MoveData next = ResolveNext();
+			if (next != null && _chainHits < chainCap)
 			{
-				_phase = Phase.Listening;
-				_counter = checkFrames;
-				SetVisual(Colors.Yellow);
+				_chainHits++;
+				StartMove(next);
 			}
 			else
 			{
@@ -140,53 +126,6 @@ public partial class CombatHandler : Node, IInputReceiver
 	private void SyncHitbox()
 	{
 		_hitbox.SetActive(CurrentSegment() == Segment.Active);
-	}
-
-	private void TickListening(double delta)
-	{
-		InputManager input = InputManager.Instance;
-		InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
-		if (_pendingAttack || (pressed & InputButtons.AttackMask) != InputButtons.None)
-		{
-			AdvanceChain();
-			return;
-		}
-
-		if ((pressed & InputButtons.DirectionMask) != InputButtons.None)
-		{
-			Direction current = Tools.GetDirection(input.Current);
-			if (current != Direction.Neutral)
-			{
-				_pendingDirection = current;
-				GD.Print($"路线标记：{Tools.GetDirectionArrow(_pendingDirection)}");
-			}
-		}
-
-		_counter--;
-		if (_counter > 0)
-		{
-			return;
-		}
-		inputStateMachine.TransitionTo(inputStateMachine.movementHandler);
-	}
-
-	private void CapturePending()
-	{
-		InputManager input = InputManager.Instance;
-		InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
-
-		if ((pressed & InputButtons.AttackMask) != InputButtons.None)
-		{
-			_pendingAttack = true;
-		}
-		if ((pressed & InputButtons.DirectionMask) != InputButtons.None)
-		{
-			Direction dir = Tools.GetDirection(input.Current);
-			if (dir != Direction.Neutral)
-			{
-				_pendingDirection = dir;
-			}
-		}
 	}
 
 	private Segment CurrentSegment()
@@ -239,10 +178,27 @@ public partial class CombatHandler : Node, IInputReceiver
 		return m ?? openerMove;
 	}
 
-	private Direction ResolveAttackDirection()
+	private MoveData ResolveNext()
 	{
-		Direction now = Tools.GetDirection(InputManager.Instance.Current);
-		return now != Direction.Neutral ? now : _pendingDirection;
+		var buffer = InputManager.Instance.Buffer;
+		for (int i = buffer.Count - 1; i >= 0; i--)
+		{
+			var rec = buffer[i];
+			if (rec.Id <= _moveStartInputId)
+			{
+				break;
+			}
+			if (rec.Attack == AttackType.None)
+			{
+				continue;
+			}
+			var prev = i > 0 ? buffer[i - 1].Attack : AttackType.None;
+			if ((prev & rec.Attack) != rec.Attack)
+			{
+				return SelectMove(rec.Direction);
+			}
+		}
+		return null;
 	}
 
 }

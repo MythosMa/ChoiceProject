@@ -31,6 +31,10 @@ public partial class MoveData : Resource
     [Export]
     public Vector2 hitboxSize = Vector2.Zero; // Hitbox 大小
 
+    [ExportGroup("移动锁定")]
+    [Export]
+    public bool lockMovement = true; // 是否移动锁定
+
     [ExportGroup("可取消性")]
     [Export]
     public bool canBeCancelled = false; // 是否可取消

@@ -25,6 +25,7 @@ size = Vector2(2240, 480)
 [sub_resource type="Resource" id="Resource_i1vam"]
 script = ExtResource("3_nxk1p")
 moveName = "action_1"
+hitstopFrames = 120
 hitboxOffset = Vector2(100, 0)
 hitboxSize = Vector2(200, 20)
 metadata/_custom_type_script = "uid://duwjwvk4spb8q"
