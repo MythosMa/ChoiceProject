@@ -10,6 +10,8 @@ public partial class FeedbackSystem : Node
     private int _shakeFramesTotal;
     private float _shakeMagnitude;
 
+    public void CancelHitstop() => _hitstopFrame = 0;
+
     public override void _EnterTree()
     {
         if (Instance != null && Instance != this)
@@ -39,7 +41,6 @@ public partial class FeedbackSystem : Node
     {
         if (_hitstopFrame > 0)
         {
-            GD.Print("Consuming hitstop frame.");
             _hitstopFrame--;
             return true;
         }
@@ -74,7 +75,7 @@ public partial class FeedbackSystem : Node
             return;
         }
         float t = (float)_shakeFrames / _shakeFramesTotal;
-        float mag = _shakeFrames * t;
+        float mag = _shakeMagnitude * t;
         cam.Offset = new Vector2((float)GD.RandRange(-mag, mag), (float)GD.RandRange(-mag, mag));
     }
 }

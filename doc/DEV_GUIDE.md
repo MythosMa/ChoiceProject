@@ -1,6 +1,6 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.11  |  日期：2026-09-11  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
+> 版本：v0.13  |  日期：2026-09-13  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
 
 ---
 
@@ -35,6 +35,7 @@ choice_project/
 │   │       ├── Player.tscn/.cs               # CharacterBody2D：物理积分、意图接口
 │   │       ├── InputStateMachine.tscn/.cs    # 输入仲裁/路由：全局触发器、状态切换
 │   │       ├── MovementHandler.tscn/.cs      # 移动状态处理器
+│   │       ├── DodgeHandler.tscn/.cs         # 闪避状态处理器（位移/无敌帧的未来承载点）
 │   │       └── CombatHandler.tscn/.cs        # 战斗状态处理器（择窗口、招式路由）
 │   ├── ui/
 │   │   └── input_test/               # 输入调试 UI（InputScreen + InputInfo）
@@ -137,16 +138,26 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 - 输入变化时生成 InputRecord 写入 Buffer（60 帧容量）；未变化时累加末条记录的 DurationFrames
 - 不含任何游戏逻辑、不知道玩家状态——同一帧内任何消费方读到的数据一致
 - 跳跃/闪避/格挡为系统键位（bit 8~10），与方向、攻击键分区隔离
+- **消费契约（核心原理，2026-09-11 顿帧修复实战印证）：** 凡是 tick 可能被冻结的消费场景（如顿帧期间的连段判定），消费者**必须从 Buffer 日志回看输入，不能在自己 tick 里用 `GetPressed(Previous, Current)` 重新采样实时边缘**——该 tick 被冻结时边缘会丢失（顿帧吞连段输入即此因，已修复，见 §七）。InputManager 的记录通道独立于 Player、不被顿帧冻结，意图得以保留。一句话：**输入只管记录，消费只管从记录里拿，不另起炉灶再查一遍实时输入。**
+  - **同一原理下的两种手法（2026-09-12 闪避修复厘清）：** 契约的本质是"把输入采集与会被冻结的时钟解耦"，落地有两条路——
+    - **(1) 消费者留在冻结区内 → 回读 Buffer 日志**：连段攻击走这条（`ResolveNext` 回扫 Buffer，见 §七 顿帧修复）。适用于消费者本身必须在 tick 内、且 `InputRecord` 记录了对应键位（方向 + 攻击）的情况。
+    - **(2) 消费者可移到冻结区外 → 把判定前移到顿帧闸门之前，直接读实时边缘**：闪避打断走这条。`Player._PhysicsProcess` 顶部、`ConsumeHitstop()` 之前先调 `InputStateMachine.TryDodgeInterrupt()`，命中即切到闪避态并 `CancelHitstop()`，否则才进顿帧 `return`。
+    - **为何闪避用 (2) 而非 (1)：** `InputRecord` **只存方向 + 攻击（AttackType），不存系统键（闪避/跳跃/格挡）**，Buffer 根本无法重建闪避边缘；且闪避判定天然可外提（它只需"这一帧有没有按闪避"，不依赖招式播放进度）。故不强行扩 Buffer，而是把检查点搬到冻结之外——更省、更直接。
 
 **InputStateMachine（Player 子节点，仲裁路由层）**
 - 不挂自己的 _PhysicsProcess，由 Player._PhysicsProcess 显式调用 Tick，保证帧内顺序：清意图 → 状态机路由 → 物理积分（MoveAndSlide 只在 Player 调用）
 - 持有当前活跃的 IInputReceiver，TransitionTo 统一执行 Exit → Enter，是所有状态切换的唯一入口
-- 全局触发器由状态机直接处理：攻击键按下边缘 → 进入战斗；闪避键按下边缘 → 无条件回到移动；UI 焦点闸门（GuiGetFocusOwner 非空时停止派发）
-- handler 引用在状态机的 _Ready 中注入（子节点 _Ready 先于父节点，handler 不得自行向上取引用）
+- 全局触发器由状态机直接处理：攻击键按下边缘 → 进入战斗；UI 焦点闸门（GuiGetFocusOwner 非空时停止派发）
+- **闪避打断独立成 `TryDodgeInterrupt()`（2026-09-12）：** 闪避判定**不再放在 `Tick` 内**（`Tick` 会被顿帧冻结），而是抽成单独方法，由 `Player._PhysicsProcess` 顶部、顿帧闸门**之前**调用——闪避键按下边缘 → `TransitionTo(dodgeHandler)` 并返回 true，调用方据此 `CancelHitstop()`。这样顿帧期间也能即时闪避。`Tick` 中原有的闪避分支已移除（手法 (2)，见上方消费契约）。
+- handler 引用在状态机的 _Ready 中注入（子节点 _Ready 先于父节点，handler 不得自行向上取引用）；`dodgeHandler` 同样在 _Ready 经 `Initialize(player, this)` 注入
 
 **状态与方向键职责：**
 - **MovementHandler（移动）**：方向键 = 移动，跳跃 = 独立键（空格），攻击键不在此处理
 - **CombatHandler（战斗）**：方向键 = 招式路由。攻击键边缘进入战斗 → 按 MoveData 帧数据播放招式（Startup→Active→Recovery）→ **播放结束帧立即二选一**：有预输入攻击且未达链长上限则无缝接续下一段，否则即刻 `TransitionTo(movementHandler)` 还移动，**无独立 Listening 空窗**（切片期"开窗约30帧、超时返回"模型已于 2026-09-11 移除，见 §七 手感修复）。闪避边缘始终优先，可即时中断播放。
+- **DodgeHandler（闪避，2026-09-12 状态化）**：闪避从原先的"`TransitionTo(movementHandler)` 即退即回"**升级为独立的 `IInputReceiver` 状态**，自带时长 `dodgeFrames`——这是承载未来闪避内容（位移、无敌帧）的**接缝**。当前仅落地：`Enter` 复位帧计数、`Tick` 内 `player.moveAxis = player.facing`（按朝向位移）、计时到则 `TransitionTo(movementHandler)` 还移动。**未做（押后 Phase 2）：** 无敌帧（`Enter`/`Exit` 已留 TODO 钩子，需玩家 Hurtbox + 敌人才有验证载体）、位移速度覆盖（暂复用移动 Speed，手感调校时再单独给闪避加速度）。
+
+> **最小 facing（2026-09-12 引入，仅为闪避方向服务）：** `Player` 加 `int facing`（1=右 / -1=左），在 `InputStateMachine.Tick` 之后由 `moveAxis` 符号更新（`if (moveAxis != 0) facing = moveAxis > 0 ? 1 : -1;`）。DodgeHandler 据此实现"面朝哪边、往哪边闪"。
+> **边界（重要）：** 这是**最小种子**，不是完整朝向系统。**Sprite 翻转表现 + 面向相对的"前/后"招式路由仍押后 Phase 2**——与 §支柱二 的结论一致：当前无对手，选招用绝对方向（Up/Down/Left/Right），"前/后"语义留到对敌时再上。facing 现阶段只喂闪避位移，不接管任何视觉或选招逻辑。
 
 **关键参数（全部外部化配置，不硬编码）：**
 - 择窗口帧数、输入缓冲帧数、状态切换延迟、变招cancel窗口、方向输入阈值
@@ -192,12 +203,34 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 > - **命中结算位置：** 伤害 + 顿帧 + 震屏暂时直接在 Hitbox 内结算（同 A3 直接 TakeDamage），将来可抽到 CombatSystem/EventBus，Phase 1 不引入。
 > - **未做（击退）：** 押后到**多招系统（支柱二）之后**再做。理由：① 击退是**招式差异化反馈**——不同招应给出不同击退（力度/方向/是否浮空等），单招阶段做体现不出差异、也没有验证载体；② 静态假人（Node2D，不走物理）表现不出位移。故顺序为：先支柱二多招 → 再 A4-3 击退（届时受击者大概率已是可位移敌人）。
 
+> **修订（2026-09-12，随闪避打断接线一并处理）：**
+> - **震屏强度算错已修：** `_PhysicsProcess` 原写 `mag = _shakeFrames * t`（用**剩余帧数**当强度），导致 MoveData 上的 `shakeMagnitude` 从未生效、震屏幅度只跟"还剩几帧"挂钩。改为 `mag = _shakeMagnitude * t`——按配置强度起震、随帧线性衰减，符合 §4.4 原设计意图。
+> - **`CancelHitstop()` 只清顿帧、不清震屏（决策）：** 闪避打断顿帧时一度想让 `CancelHitstop` 连 `_shakeFrames` 一并置 0。**否决**：① 顶部 guard `if (_shakeFrames <= 0) return;` 会让手动置 0 跳过 `cam.Offset = Vector2.Zero` 归位，**相机卡偏在最后一次抖动偏移上回不来**；② 震屏是纯表现层、不阻塞任何逻辑，闪避照常执行，留着几帧余韵反而读感更好（"这一拳确实打中了，然后你闪走了"）。故 `CancelHitstop()` 维持 `{ _hitstopFrame = 0; }`，让震屏自然衰减到归位。注：实测时把 hitstop 拉到 120 帧才会觉得"震屏没停"突兀，真实调校 hitstop≈6 帧，残余震屏一闪即过。
+> - **清理调试打印：** 删掉 `ConsumeHitstop` 内每帧刷屏的 `GD.Print("Consuming hitstop frame.")`（顿帧每帧一行，长顿帧会淹没控制台）。
+
 ### 4.5 实现约定
 
-- **可复用组件的形状 = 编辑器预设 + 本地到场景（Local To Scene），不用代码 new。** Hitbox/Hurtbox 的 CollisionShape2D 形状在编辑器里预设（RectangleShape2D 等），并对**资源本身**勾选"本地到场景"（Inspector 选中 Shape 资源 → 勾选 `本地到场景 / Local To Scene`），使其按实例自动复制、互不共享。
-  - **为什么：** Godot 的 .tscn 内联 sub_resource 默认被所有场景实例共享——改一个 size 会影响全部。代码里 `_rect.Size = x` 若不加"本地到场景"，等于在改所有实例共用的同一份形状。
-  - **为什么不用代码 new：** 未来不同敌人需要**手编辑**的判定形状（尺寸/偏移各异），"编辑器预设 + 本地到场景"既保证可手编、又消除共享，优于运行时 `new RectangleShape2D()`。
+- **可复用组件的形状 = 编辑器预设 + 按实例独立，不用代码 new。** Hitbox/Hurtbox 的 CollisionShape2D 形状在编辑器里预设（RectangleShape2D 等），但要让每个场景实例各持一份、互不共享，Godot 有**两种等价手法**，二选一即可：
+  - **唯一化（Make Unique）：** 在 .tscn 里选中被引用的资源（如 CollisionShape2D 的 Shape）→ 右键 `唯一化 / Make Unique`。Godot 会把共享资源**就地拷贝成本场景私有的一份**（.tscn 里生成一条本场景专属 sub_resource）。玩家 Hurtbox 用的就是这个——Player.tscn 里生成了私有的 `RectangleShape2D_lxifr`，与 Hurtbox.tscn 共享的 `RectangleShape2D_7xy7u` 彻底脱钩。**每个实例都要手动唯一化一次。**
+  - **本地到场景（Local To Scene）：** 在**源资源**（Hurtbox.tscn 里那份 Shape）Inspector 勾选 `本地到场景 / Local To Scene`。这是一个标志位，让该资源在**每个引用它的场景加载时自动复制**，无需逐个手动唯一化。
+  - **为什么必须二选一：** Godot 的 .tscn 内联 sub_resource 默认被所有场景实例共享——改一个 size 会影响全部。代码里 `_rect.Size = x` 若不做独立化，等于在改所有实例共用的同一份形状。
+  - **为什么不用代码 new：** 未来不同敌人需要**手编辑**的判定形状（尺寸/偏移各异），"编辑器预设 + 按实例独立"既保证可手编、又消除共享，优于运行时 `new RectangleShape2D()`。
   - 运行时代码只**读取/微调**预设形状（如按 MoveData 覆盖 size/offset），不负责创建。
+  - **S2 建议（多敌人时）：** 敌人一多，逐个唯一化容易漏。**在 Hurtbox.tscn / Hitbox.tscn 的源 Shape 上勾一次 `本地到场景`**，之后所有实例自动独立、零心智负担；已唯一化的玩家实例保持不变即可，两者结果等价、可共存。
+
+- **战斗判定碰撞分层（S1 约定，2026-09-12）：** Hitbox/Hurtbox 都是 Area2D，靠 `area_entered` 互相检测。Godot 默认所有 Area 都在物理层 1 / 掩码 1——这会让**玩家自己的 Hitbox 检测到自己的 Hurtbox（出招即自伤）**，且敌我判定全混在一层、无法区分。故给战斗判定 Area 单独分层（在 **项目设置 → 层名称 → 2D 物理** 命名）：
+
+  | 层 | 命名 | 占用者 |
+  |----|------|--------|
+  | 1 | world | 地形 + CharacterBody2D 身体碰撞（`move_and_slide` 用，**维持现状不动**） |
+  | 2 | player_hurtbox | 玩家 Hurtbox |
+  | 3 | player_hitbox | 玩家 Hitbox |
+  | 4 | enemy_hurtbox | 训练假人 + 未来敌人的 Hurtbox |
+  | 5 | enemy_hitbox | 未来敌人的 Hitbox |
+
+  - **掩码规则（谁检测谁）：** 攻击方 Hitbox 的**掩码 = 对方 Hurtbox 所在层**。玩家 Hitbox：层=3、掩码=**4**（enemy_hurtbox，不含 2 → 不自伤，仍能打到假人）；敌人 Hitbox（S2）：层=5、掩码=**2**（player_hurtbox）。
+  - **Hurtbox 只需设对"层"：** 它是 monitorable、不 monitoring（`Hurtbox.cs` 里 `Monitoring=false / Monitorable=true`），掩码用不上。命中由 **monitoring 的 Hitbox** 发 `area_entered`，故检测关系完全由"Hitbox 的掩码指向哪个 Hurtbox 层"决定。
+  - **身体碰撞不分进这套：** Area 间走 `area_entered`、CharacterBody2D 身体走 `move_and_slide`（body 碰撞），两套互不干扰。只给 Area 组件（Hitbox/Hurtbox）分层即可，玩家/敌人身体的层与掩码维持现状。
 
 ---
 
@@ -338,14 +371,14 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 > - 任务 9（FeedbackSystem）：顿帧、震屏已实现并验收，FeedbackSystem 以 Autoload 落地（机制详见 §4.4）。击退押后到**多招系统（支柱二）之后**——击退是招式差异化反馈，需多招才有验证载体（理由详见 §4.4）。
 > - 任务 10（参数外部化）：`hitstopFrames`、`shakeMagnitude` 已在 MoveData 上可调（Inspector 改 openerMove 资源），尚未抽 FeedbackConfig.tres。
 >
-> **已知调校项（顿帧引入）：**
-> - **顿帧可能吞连段输入**：顿帧冻结 Player tick，但 InputManager（独立 Autoload）照常采集；而 InputStateMachine 用 `GetPressed(Previous, Current)` **单帧边缘**检测攻击。顿帧 >1 帧时，期间按下的攻击键在顿帧结束后 Previous/Current 都为"按着"→ 无边缘 → 触发被吞。`InputManager.Buffer(60)` 正是为此预留但尚未接线。
->   - **当前态度**：A4-1 先用单帧边缘跑通，不修。
->   - **处理时机**：任务 11 手感调校时实测——若连段偶发接不上变明显，让 InputStateMachine 改用 Buffer 在顿帧结束帧补检测攻击边缘。
+> **已修复（2026-09-11）· 顿帧吞连段输入：** 顿帧冻结 Player tick，旧 `CombatHandler.CapturePending` 在 tick 内用 `GetPressed(Previous, Current)` **单帧边缘**采样攻击——顿帧期间 tick 不跑，且按住的键在顿帧结束后 Previous/Current 都为"按着"无边缘，故顿帧中按下的攻击被吞、连段接不上（实测：`hitstopFrames` 拉到 120、冻结中按攻击，结束后不出招）。删除 Listening 兜底窗口后连段全靠此缓存，问题从"偶发"升为"主要断连原因"。
+>   - **修复：** `ResolveNext` 不再读 tick 内边缘，改**回扫 `InputManager.Buffer`**——以 `StartMove` 记录的 `_moveStartInputId`（`InputRecord.Id` 单调递增）为基线，只扫本招开始后产生的记录，用 `(prev & rec.Attack) != rec.Attack` 从状态记录重建"按下边缘"，方向取该记录 `rec.Direction`（攻击与方向绑定于按下那一刻，一并消解了连段方向时序问题）。删除 `CapturePending` / `_pendingAttack` / `_pendingDirection` / `ResolveAttackDirection`。
+>   - **原理：** 见 §4.1 "消费契约"——消费者只从输入日志取，不在会被冻结的 tick 里重新采样实时输入。
+>   - **遗留同源项 · 顿帧期间按闪避被吞：已修复（2026-09-12）。** 与顿帧吞连段同一根因（闪避判定原在 `InputStateMachine.Tick` 内，顿帧也冻结它）。但**修法不同**：连段攻击走"回扫 Buffer"（手法 (1)），闪避走"把判定前移到顿帧闸门之前、读实时边缘"（手法 (2)）——因为 `InputRecord` 不存系统键（闪避/跳跃/格挡），Buffer 无法重建闪避边缘。详见下方「闪避修复 + DodgeHandler 状态化（2026-09-12）」与 §4.1 消费契约。
 
 **手感修复 + 可行性回顾（2026-09-11）**
 
-> **卡手修复（删除"死窗口"）：** 切片期 CombatHandler 在招式播放结束后进入约 30 帧 `Listening` 窗口干等连段输入，期间角色钉在原地——这是"战斗↔移动"切换卡手的**根因（非播放锁定本身）**。已移除 `Listening` 相位与 `checkFrames`/`_counter`/`AdvanceChain`，改为：`TickPlaying` 在播放结束帧直接判定——有预输入攻击（`_pendingAttack`，播放期由 `CapturePending` 暂存）且未达 `chainCap` 则 `StartMove(ResolveNext())` 无缝接续，否则立即 `TransitionTo(movementHandler)`，**零空窗还移动**。连段计数折进 `TickPlaying`。
+> **卡手修复（删除"死窗口"）：** 切片期 CombatHandler 在招式播放结束后进入约 30 帧 `Listening` 窗口干等连段输入，期间角色钉在原地——这是"战斗↔移动"切换卡手的**根因（非播放锁定本身）**。已移除 `Listening` 相位与 `checkFrames`/`_counter`/`AdvanceChain`，改为：`TickPlaying` 在播放结束帧直接判定——有预输入攻击（`_pendingAttack`，播放期由 `CapturePending` 暂存）且未达 `chainCap` 则 `StartMove(ResolveNext())` 无缝接续，否则立即 `TransitionTo(movementHandler)`，**零空窗还移动**。连段计数折进 `TickPlaying`。（注：此处 `_pendingAttack`/`CapturePending` 的边缘缓存随后在顿帧修复中改为回扫 `Buffer`，详见上文「已修复 · 顿帧吞连段输入」。）
 > - **每招移动锁定数据化：** `MoveData` 新增 `lockMovement`（默认 `true`）。"播放期是否锁走位"从全局架构决策**下沉为每招的数据属性**——绝大多数招锁定，少数快速招可设 `false` 实现"边走边打"。
 >   - **当前落实范围：** 仅"锁定"路径生效（战斗态本就不写 `moveAxis`）。`!lockMovement` 的播放中走位仍是 **TODO**——`TickPlaying` 内对应分支体为空、且条件写成了 `if (_move.lockMovement)`（应为 `!_move.lockMovement`），待接 `ReadHorizontalAxis`（抄 movementHandler 读水平轴那段）。因所有招默认 `true`，暂不阻塞手感。
 > - **GAME_DESIGN §3.1 同步校准：** 快速招式层原写"不锁定移动，随时可以走位"，已校准为"播放极短、结束即还移动、无死窗口；播放期是否锁定由每招 `lockMovement` 决定"。
@@ -353,14 +386,29 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 > **可行性回顾结论（第一次）：** 本轮一度计划引入"序列匹配器（`MoveResolver`）+ →↓↘ / →↘↓ 两条易串测试搓招"做"架构兼容性验证、避免后续 rework"。经对照 GAME_DESIGN §2.1.1 / §9.2 判定为**漂移信号并已叫停**：
 > - **判据：** 选这两条指令的理由是"街霸里容易串招、可拿来调手感"——而调校近似指令的串招区分度本质是**执行层（手指精度）工作**，命中 §9.2 自查信号"想的是'这招没按出来'而非'该不该用'"；且序列匹配器与已押后的 task 6（路由树）/ task 8（cancel）同属"在知道出招表前先建路由"，违背同一纪律。"避免 rework"的动机也被高估：现 `SelectMove` 的 `switch` 本就 held loosely，将来换序列匹配是增量替换。
 > - **更深的可行性结论：** 按 §2.1.2，**择 = 破招，payoff（造成伤害 / 避免伤害）需对手**；Phase 1 无敌人 → **结构上无法验证"择"**。故 Phase 1 的健康姿态是"substrate 够用即止、手感做到位"，**不在执行层精雕**，尽快推进到 Phase 2 第一个会出题的敌人——那是本项目第一次能真正回答"择成不成立"。
-> - **处置：** 序列 / 搓招匹配器押后到 Phase 1→2 交界，与正式出招表、task 6 / task 8 一并设计。`InputManager.Buffer(60)` 维持预留、不接线。
+> - **处置：** 序列 / 搓招匹配器押后到 Phase 1→2 交界，与正式出招表、task 6 / task 8 一并设计。`InputManager.Buffer(60)` 已为**顿帧输入恢复**接线（见 §4.1 消费契约 / §七 已修复），但**序列匹配（搓招）仍未接线**，留待出招表设计时顺着同一条 Buffer 管线扩展。
+
+**闪避修复 + DodgeHandler 状态化（2026-09-12）**
+
+> **问题（顿帧期间闪避打不断）：** 闪避判定原在 `InputStateMachine.Tick` 内，而顿帧冻结的正是 Player tick（连带 `Tick`）——故顿帧期间按闪避无响应。与"顿帧吞连段输入"同根因，但属另一条修复路径（见 §4.1 消费契约手法 (2)）。
+> - **修复（判定前移到顿帧闸门之前）：** 把闪避检查从 `Tick` 抽出为独立方法 `TryDodgeInterrupt()`，由 `Player._PhysicsProcess` 顶部、`ConsumeHitstop()` **之前**调用：闪避键按下边缘且当前不在闪避态 → `TransitionTo(dodgeHandler)` 并返回 true，调用方据此 `FeedbackSystem.Instance.CancelHitstop()`；否则才进顿帧 `return`。`Tick` 内原闪避分支移除。这样顿帧也能即时闪避——闪避判定移出了被冻结的区域，读实时边缘即可，无需回扫 Buffer（`InputRecord` 本就不存系统键）。
+> - **闪避升级为独立状态（DodgeHandler）：** 原先闪避只是"`TransitionTo(movementHandler)` 即退即回"，没有自身时长，无法承载位移/无敌帧。现新建 `DodgeHandler : Node, IInputReceiver`（Player 子节点，编辑器挂脚本 + 拖入状态机 `Dodge Handler` 槽，`player`/`inputStateMachine` 经 `Initialize` 注入），自带 `dodgeFrames` 时长，作为**未来闪避内容（位移、无敌帧）的接缝**。当前仅 `Tick` 内 `moveAxis = facing` 产生位移、计时到还移动；`Enter`/`Exit` 留好无敌帧 TODO 钩子。
+> - **最小 facing 种子：** `Player` 加 `int facing`（1=右/-1=左），`Tick` 后由 `moveAxis` 符号更新，DodgeHandler 据此实现"面朝哪边往哪边闪"。**边界：仅最小种子**——Sprite 翻转 + 面向相对的"前/后"招式路由仍押后 Phase 2（同 §支柱二 绝对方向结论），facing 现阶段不接管视觉或选招。
+> - **FeedbackSystem 同批修订：** 震屏强度 bug（`_shakeFrames * t` → `_shakeMagnitude * t`）、`CancelHitstop` 只清顿帧不清震屏（清震屏会因顶部 guard 跳过 `Offset` 归位致相机卡偏）、删除 `ConsumeHitstop` 调试打印——详见 §4.4「修订（2026-09-12）」。
+> - **验收状态：** 顿帧打断已实测生效（顿帧期间按闪避可立即切闪避态并清顿帧）。**未做（押后）：** 无敌帧（需玩家 Hurtbox + 敌人，Phase 2）、闪避位移速度覆盖（暂复用移动 Speed，task 11 手感调校再单独给加速度）。
 
 **完成标志：**
-- [ ] 移动中出招不卡顿，状态切换自然
-- [ ] 一发真招打通全链路：帧数据驱动 → 活跃帧 hitbox → 命中假人 → 伤害 + 反馈
-- [ ] 连段可搓出来，方向路由选到不同招；cancel 机制接口就位
-- [ ] 打到假人有明显打击感（顿帧 + 震动；击退随多招系统后补，见 §4.4）
-- [ ] 连续操作 5 分钟不觉疲惫
+- [x] 移动中出招不卡顿，状态切换自然（卡手修复删死窗口 + 顿帧可被闪避打断，2026-09-11/12）
+- [x] 一发真招打通全链路：帧数据驱动 → 活跃帧 hitbox → 命中假人 → 伤害 + 反馈（支柱一 task 1–5，已打到训练假人）
+- [ ] 连段可搓出来，方向路由选到不同招；cancel 机制接口就位 —— **连段 + 方向选招已达成**（顿帧吞输入修复 + 支柱二 SelectMove）；**cancel 接口有意押后**（task 8，§2.1.2：待 Phase 2 破招语义清楚再填，非未完成）
+- [x] 打到假人有明显打击感（顿帧 + 震动；震屏强度 bug 已修；击退随多招系统后补，见 §4.4）
+- [ ] 连续操作 5 分钟不觉疲惫 —— **唯一剩余的手感闸门**，属主观实测项，待 task 11 正式试玩打分（卡手/顿帧两大碍手项已清除，预期可通过）
+
+**Phase 1 回溯记录（2026-09-12，阶段间回溯节点）：**
+- **substrate"够用即止"达成。** 进攻面（帧数据驱动播放 + 方向选招 + 连段路由）、防御面（闪避全局打断、顿帧期可打断）、打击反馈（顿帧 + 震屏）三块地基已转起来，手感三大碍手项（卡手死窗口、顿帧吞连段、顿帧锁闪避）已逐一修复并记录。
+- **对照设计假设：** Phase 1 验证了"输入→状态路由→招式播放→命中反馈"骨架可行，但**按 §2.1.2，Phase 1 结构上无法验证"择"本身**（无对手 → 破招无从发生）。这与设计预期一致，非意外。
+- **有意押后项（纪律性推迟，非未完成）：** cancel 接口（task 8）、完整 ComboSystem 路由树（task 6）、序列/搓招匹配器、击退（A4-3）、确反加成接口——全部属"在知道出招表前先建路由"或"需对手才有验证载体"，按 §2.1.2 / §9.2 押后到 Phase 2 由敌人出题反推。
+- **结论：Phase 1 可收口，进入 Phase 2。** 下一步是把"择"从空转变为有赌注——补"玩家受击 + 敌人出题"两台机器（详见 Phase 2 切入序列）。
 
 ---
 
@@ -368,7 +416,19 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 
 **目标：** 敌人能"出题"，玩家的"择"有实际意义——选对了和乱按有体感差异。
 
-**前置：** Phase 1完成后，需进行招式/搓招表设计，确定正式连招结构后再进入本阶段。
+**前置（2026-09-12 校准）：** ~~Phase 1 完成后需先设计招式/搓招表再进本阶段~~ —— **此表述作废**。按 GAME_DESIGN §2.1.2，**正式出招表待第一个敌人定型后反推**，不是进 Phase 2 的前置条件；先设计 roster 等于"在知道问题之前先写答案"。Phase 2 的真正前置是 Phase 1 substrate 收口（已达成，见上方回溯记录）。
+
+**Phase 2 切入序列（tracer-bullet，2026-09-12 定）：** 承 Phase 1"先深后宽、不预先抽象"纪律，**先把一个直球型敌人端到端打通**，通用 EnemyBase / AI 状态机 / Signal 系统（下方 task 1–3）由这个过程**逼出后再提取**，不先建框架。择 = 破招需"赌注 + 对手"，故序列先补这两台机器：
+
+| 步 | 做什么 | 对应缺口 / 依据 |
+|---|--------|----------------|
+| **S1** | **玩家可受击**：Player 挂 Hurtbox 子节点 + 实现 `IDamageable` + HP + 受击反馈（闪红/顿帧）。复用现成 `scenes/combat/components/`（假人已在用） | 缺口 A——没有"对己避免伤害"的代价，押错=0后果，违反 §1.4 原则3"有风险才有快感" |
+| **S2** | **一个直球型敌人端到端**：预兆(可读视觉 Signal) → 攻击(带 Hitbox，能打到玩家) → 固定破绽窗口(Recovery)。命中玩家须**中断其当前招式 + 受击硬直**（择错惩罚，2026-09-12 确认，见 GAME_DESIGN §2.1.2 决策记录）。先**确定性出题**（固定 pattern） | 缺口 B——破招需"有一招被破"；§4.3 先确定性验证择成立，再上随机 |
+| **S3** | **反推最小确反 roster**：此时才动出招表——"破这一招需要什么"，由敌人破绽类型逼出 1–2 个确反招 | §2.1.2 反推纪律，不凭空设计 roster |
+| **S4** | **确反 payoff 差异化**：确反窗口判定 → 伤害 / 反馈强度差，接线 Phase 1 押后的确反加成接口 | §4.4"择对了"体感须明显高于普通命中 |
+
+> **验证闸门：** S1–S4 跑通后，对照 GAME_DESIGN §9.4 止损线 Q1（面对敌人会犹豫用哪招吗）/ Q4（愿意反复打吗）——这是项目**第一次能真正回答"择成不成立"**。
+> **下方 task 1–12 仍是 Phase 2 的完整结构**，但其"先框架（task 1–3）后敌人（task 6）"的字面顺序**被本切入序列取代**：框架是 S2 打通后提取的产物，不是起点。
 
 | # | 任务 | 涉及文件 | 说明 |
 |---|------|---------|------|

@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cbn1ri1ayql4o"]
+
+[ext_resource type="Script" uid="uid://bdsa63fuvqoja" path="res://scenes/characters/player/DodgeHandler.cs" id="1_7vp20"]
+
+[node name="DodgeHandler" type="Node" unique_id=1057185290]
+script = ExtResource("1_7vp20")

@@ -20,6 +20,9 @@ public partial class InputStateMachine : Node
 	[Export]
 	public CombatHandler combatHandler;
 
+	[Export]
+	public DodgeHandler dodgeHandler;
+
 	private IInputReceiver currentInputReceiver;
 
 
@@ -28,8 +31,30 @@ public partial class InputStateMachine : Node
 	{
 		movementHandler.Initialize(player);
 		combatHandler.Initialize(player, this);
+		dodgeHandler.Initialize(player, this);
 		TransitionTo(movementHandler);
 	}
+
+	public bool TryDodgeInterrupt()
+	{
+		if (player.GetViewport().GuiGetFocusOwner() != null)
+		{
+			return false;
+		}
+		InputManager input = InputManager.Instance;
+		InputButtons buttons = Tools.GetPressed(input.Previous, input.Current);
+		if ((buttons & InputButtons.Dodge) == InputButtons.None)
+		{
+			return false;
+		}
+		if (currentInputReceiver == dodgeHandler)
+		{
+			return false;
+		}
+		TransitionTo(dodgeHandler);
+		return true;
+	}
+
 
 	public void Tick(double delta)
 	{
@@ -41,18 +66,11 @@ public partial class InputStateMachine : Node
 		InputManager input = InputManager.Instance;
 		InputButtons buttons = Tools.GetPressed(input.Previous, input.Current);
 
-		if ((buttons & InputButtons.Dodge) != InputButtons.None && currentInputReceiver != movementHandler)
-		{
-			TransitionTo(movementHandler);
-			return;
-		}
-
 		if (currentInputReceiver == movementHandler && (buttons & InputButtons.AttackMask) != InputButtons.None)
 		{
 			TransitionTo(combatHandler);
 			return;
 		}
-
 
 		currentInputReceiver?.Tick(delta);
 	}

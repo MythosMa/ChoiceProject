@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_7uxrv")
 moveName = "action_1"
+hitstopFrames = 120
 hitboxOffset = Vector2(100, 0)
 hitboxSize = Vector2(200, 20)
 metadata/_custom_type_script = "uid://duwjwvk4spb8q"
