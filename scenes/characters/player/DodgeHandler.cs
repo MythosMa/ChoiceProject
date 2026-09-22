@@ -5,6 +5,8 @@ public partial class DodgeHandler : Node, IInputReceiver
 {
     [Export]
     public int dodgeFrames = 12;
+    [Export]
+    public int cooldownFrames = 60;
 
     private int _frame;
     private Direction _dodgeDirection;
@@ -21,8 +23,13 @@ public partial class DodgeHandler : Node, IInputReceiver
     public void Enter()
     {
         _frame = 0;
+        player.invincible = true;
+        player.dodgeCooldown = cooldownFrames;
     }
-    public void Exit() { }
+    public void Exit()
+    {
+        player.invincible = false;
+    }
     public void Tick(double delta)
     {
         _frame++;

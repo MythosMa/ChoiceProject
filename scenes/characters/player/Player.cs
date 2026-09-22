@@ -16,7 +16,11 @@ public partial class Player : CharacterBody2D, IDamageable
 	public int facing = 1;
 	public float moveAxis;
 	private bool jumpRequested = false;
+	private bool _hitstunRequested = false;
 	public void RequestJump() => jumpRequested = true;
+
+	public bool invincible = false;
+	public int dodgeCooldown = 0;
 
 	public override void _Ready()
 	{
@@ -25,11 +29,21 @@ public partial class Player : CharacterBody2D, IDamageable
 
 	public override void _PhysicsProcess(double delta)
 	{
+		if (dodgeCooldown > 0)
+		{
+			dodgeCooldown--;
+		}
+		if (_hitstunRequested)
+		{
+			_hitstunRequested = false;
+			inputStateMachine.ForceHitstun();
+
+		}
 		if (inputStateMachine.TryDodgeInterrupt())
 		{
 			FeedbackSystem.Instance.CancelHitstop();
 		}
-		else if (FeedbackSystem.Instance.ConsumeHitstop())
+		else if (FeedbackSystem.Instance.IsHitstopActive)
 		{
 			return;
 		}
@@ -59,13 +73,20 @@ public partial class Player : CharacterBody2D, IDamageable
 		MoveAndSlide();
 	}
 
-	public void TakeDamage(int damageAmount)
+	public bool TakeDamage(int damageAmount)
 	{
+		if (invincible)
+		{
+			GD.Print($"无敌状态，无法受到伤害 {damageAmount}");
+			return false;
+		}
 		_hp = Mathf.Max(0, _hp - damageAmount);
+		_hitstunRequested = true;
 		GD.Print($"被攻击： -{damageAmount}, HP: {_hp} / {maxHP}");
 		if (_hp <= 0)
 		{
 			GD.Print("Game Over!");
 		}
+		return true;
 	}
 }

@@ -11,7 +11,7 @@ size = Vector2(16, 16)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_i1vam"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_lxifr"]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_imd1d"]
 
 [node name="Player" type="CharacterBody2D" unique_id=1416864205 node_paths=PackedStringArray("inputStateMachine")]
 script = ExtResource("1_b7oxf")
@@ -38,7 +38,7 @@ collision_layer = 2
 collision_mask = 0
 
 [node name="CollisionShape2D" parent="Hurtbox" index="0" unique_id=221828787]
-shape = SubResource("RectangleShape2D_lxifr")
+shape = SubResource("RectangleShape2D_imd1d")
 
 [editable path="InputStateMachine"]
 [editable path="Hitbox"]

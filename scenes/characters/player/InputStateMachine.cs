@@ -23,6 +23,9 @@ public partial class InputStateMachine : Node
 	[Export]
 	public DodgeHandler dodgeHandler;
 
+	[Export]
+	public HitstunHandler hitstunHandler;
+
 	private IInputReceiver currentInputReceiver;
 
 
@@ -32,6 +35,8 @@ public partial class InputStateMachine : Node
 		movementHandler.Initialize(player);
 		combatHandler.Initialize(player, this);
 		dodgeHandler.Initialize(player, this);
+		hitstunHandler.Initialize(player, this);
+
 		TransitionTo(movementHandler);
 	}
 
@@ -47,12 +52,21 @@ public partial class InputStateMachine : Node
 		{
 			return false;
 		}
-		if (currentInputReceiver == dodgeHandler)
+		if (currentInputReceiver == dodgeHandler || currentInputReceiver == hitstunHandler)
+		{
+			return false;
+		}
+		if (player.dodgeCooldown > 0)
 		{
 			return false;
 		}
 		TransitionTo(dodgeHandler);
 		return true;
+	}
+
+	public void ForceHitstun()
+	{
+		TransitionTo(hitstunHandler);
 	}
 
 
@@ -80,6 +94,7 @@ public partial class InputStateMachine : Node
 		currentInputReceiver?.Exit();
 		currentInputReceiver = next;
 		currentInputReceiver.Enter();
+		GD.Print($"Transitioned to {next.GetType().Name}");
 	}
 
 }

@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="ChoiceProject"
-run/main_scene="uid://c85on18pc2whp"
+run/main_scene="uid://bfvvgfpur4ve1"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 

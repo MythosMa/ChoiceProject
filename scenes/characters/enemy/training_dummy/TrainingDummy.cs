@@ -32,7 +32,7 @@ public partial class TrainingDummy : Node2D, IDamageable
 		}
 	}
 
-	public void TakeDamage(int damageAmount)
+	public bool TakeDamage(int damageAmount)
 	{
 		_hp = Mathf.Max(0, _hp - damageAmount);
 		GD.Print($"被攻击： -{damageAmount}, HP: {_hp} / {maxHP}");
@@ -43,5 +43,6 @@ public partial class TrainingDummy : Node2D, IDamageable
 		{
 			GD.Print("被击杀了");
 		}
+		return true;
 	}
 }

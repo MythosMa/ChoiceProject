@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="MoveData" format=3 uid="uid://bca8h1nglpm3x"]
+
+[ext_resource type="Script" uid="uid://duwjwvk4spb8q" path="res://scripts/data/MoveData.cs" id="1_1ihgx"]
+
+[resource]
+script = ExtResource("1_1ihgx")
+moveName = "enemy01_attack"
+startupFrames = 30
+recoveryFrames = 40
+damage = 12
+hitboxOffset = Vector2(140, 0)
+hitboxSize = Vector2(240, 16)
+metadata/_custom_type_script = "uid://duwjwvk4spb8q"

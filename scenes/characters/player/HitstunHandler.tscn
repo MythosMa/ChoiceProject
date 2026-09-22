@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dcvvodqfshw11"]
+
+[ext_resource type="Script" uid="uid://djtdf3o7566q7" path="res://scenes/characters/player/HitstunHandler.cs" id="1_1rfd2"]
+
+[node name="HistunHandler" type="Node" unique_id=164804537]
+script = ExtResource("1_1rfd2")

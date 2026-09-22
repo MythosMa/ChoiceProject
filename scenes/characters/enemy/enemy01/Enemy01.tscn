@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://ds37m2nnsk7x1"]
+
+[ext_resource type="Script" uid="uid://blc03k64a4462" path="res://scenes/characters/enemy/enemy01/Enemy01.cs" id="1_a7k2l"]
+[ext_resource type="Texture2D" uid="uid://qkaroutfnxm" path="res://assets/textures/white.png" id="1_wt40p"]
+[ext_resource type="Script" uid="uid://y6jprnxs4nr6" path="res://scenes/characters/enemy/enemy01/EnemyStateMachine.cs" id="3_h743h"]
+[ext_resource type="Resource" uid="uid://bca8h1nglpm3x" path="res://scenes/characters/enemy/enemy01/Enemy01Attack.tres" id="4_h743h"]
+[ext_resource type="PackedScene" uid="uid://dqillv5arvmal" path="res://scenes/combat/components/Hitbox.tscn" id="5_ady4a"]
+[ext_resource type="PackedScene" uid="uid://b5jqd46ydk0kg" path="res://scenes/combat/components/Hurtbox.tscn" id="6_xhuhs"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wt40p"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1ihgx"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_tv226"]
+
+[node name="Enemy01" type="CharacterBody2D" unique_id=321169640 node_paths=PackedStringArray("enemyStateMachine", "attackHitbox")]
+script = ExtResource("1_a7k2l")
+enemyStateMachine = NodePath("EnemyStateMachine")
+attackHitbox = NodePath("Hitbox")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=570436661]
+texture = ExtResource("1_wt40p")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1403613462]
+shape = SubResource("RectangleShape2D_wt40p")
+
+[node name="Hitbox" parent="." unique_id=835786613 instance=ExtResource("5_ady4a")]
+collision_layer = 16
+collision_mask = 2
+
+[node name="CollisionShape2D" parent="Hitbox" index="0" unique_id=2128622986]
+shape = SubResource("RectangleShape2D_1ihgx")
+
+[node name="EnemyStateMachine" type="Node" parent="." unique_id=1898098769]
+script = ExtResource("3_h743h")
+attackMove = ExtResource("4_h743h")
+
+[node name="Hurtbox" parent="." unique_id=1020424420 instance=ExtResource("6_xhuhs")]
+collision_layer = 8
+collision_mask = 0
+
+[node name="CollisionShape2D" parent="Hurtbox" index="0" unique_id=221828787]
+shape = SubResource("RectangleShape2D_tv226")
+
+[editable path="Hitbox"]
+[editable path="Hurtbox"]

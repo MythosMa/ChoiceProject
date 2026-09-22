@@ -4,15 +4,19 @@
 [ext_resource type="PackedScene" uid="uid://djjrdkuvc836e" path="res://scenes/characters/player/MovementHandler.tscn" id="2_ef2ah"]
 [ext_resource type="PackedScene" uid="uid://d288vuhp41h8p" path="res://scenes/characters/player/CombatHandler.tscn" id="3_4l2ib"]
 [ext_resource type="PackedScene" uid="uid://cbn1ri1ayql4o" path="res://scenes/characters/player/DodgeHandler.tscn" id="4_ef2ah"]
+[ext_resource type="PackedScene" uid="uid://dcvvodqfshw11" path="res://scenes/characters/player/HitstunHandler.tscn" id="5_4l2ib"]
 
-[node name="InputStateMachine" type="Node" unique_id=1868557808 node_paths=PackedStringArray("movementHandler", "combatHandler", "dodgeHandler")]
+[node name="InputStateMachine" type="Node" unique_id=1868557808 node_paths=PackedStringArray("movementHandler", "combatHandler", "dodgeHandler", "hitstunHandler")]
 script = ExtResource("1_4r7sw")
 movementHandler = NodePath("MovementHandler")
 combatHandler = NodePath("CombatHandler")
 dodgeHandler = NodePath("DodgeHandler")
+hitstunHandler = NodePath("HistunHandler")
 
 [node name="MovementHandler" parent="." unique_id=406152192 instance=ExtResource("2_ef2ah")]
 
 [node name="CombatHandler" parent="." unique_id=809220710 instance=ExtResource("3_4l2ib")]
 
 [node name="DodgeHandler" parent="." unique_id=1057185290 instance=ExtResource("4_ef2ah")]
+
+[node name="HistunHandler" parent="." unique_id=164804537 instance=ExtResource("5_4l2ib")]

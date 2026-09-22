@@ -34,9 +34,12 @@ public partial class Hitbox : Area2D
 	{
 		if (area is Hurtbox hurtbox && _move != null)
 		{
-			hurtbox.Receiver.TakeDamage(_move.damage);
-			FeedbackSystem.Instance.RequestHitstop(_move.hitstopFrames);
-			FeedbackSystem.Instance.RequestShake(_move.hitstopFrames, _move.shakeMagnitude);
+			bool hitLanded = hurtbox.Receiver.TakeDamage(_move.damage);
+			if (hitLanded)
+			{
+				FeedbackSystem.Instance.RequestHitstop(_move.hitstopFrames);
+				FeedbackSystem.Instance.RequestShake(_move.hitstopFrames, _move.shakeMagnitude);
+			}
 		}
 	}
 }

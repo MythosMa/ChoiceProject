@@ -9,8 +9,8 @@ public partial class FeedbackSystem : Node
     private int _shakeFrames;
     private int _shakeFramesTotal;
     private float _shakeMagnitude;
-
     public void CancelHitstop() => _hitstopFrame = 0;
+    public bool IsHitstopActive => _hitstopFrame > 0;
 
     public override void _EnterTree()
     {
@@ -37,16 +37,6 @@ public partial class FeedbackSystem : Node
         }
     }
 
-    public bool ConsumeHitstop()
-    {
-        if (_hitstopFrame > 0)
-        {
-            _hitstopFrame--;
-            return true;
-        }
-        return false;
-    }
-
     public void RequestShake(int frames, float magnitude)
     {
         if (frames > _shakeFrames)
@@ -59,6 +49,10 @@ public partial class FeedbackSystem : Node
 
     public override void _PhysicsProcess(double delta)
     {
+        if (_hitstopFrame > 0)
+        {
+            _hitstopFrame--;
+        }
         if (_shakeFrames <= 0)
         {
             return;
