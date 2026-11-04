@@ -4,7 +4,7 @@
 >
 > 这份文档回答三个问题：**现在在哪、下一步做什么、怎么算做完。**
 > 它取代了 `DEV_GUIDE.md` §七 的旧阶段任务表（Phase 0–4，已冻结为历史记录）。
-> 设计层面为什么这么走 → `GAME_DESIGN.md`；技术怎么实现、踩过什么坑 → `DEV_GUIDE.md`。
+> 设计层面为什么这么走 → [`GAME_DESIGN §0 一页读懂`](GAME_DESIGN.md)；技术怎么实现、踩过什么坑 → [`DEV_GUIDE.md`](DEV_GUIDE.md)。
 
 ---
 

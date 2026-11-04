@@ -6,6 +6,8 @@
 - 阶段：**M0 基座收口**（见 [ROADMAP](doc/ROADMAP.md)）
 - 一句话现状：核心战斗机制已跑通，但「择」还没被外部验证过；当前版本仍存在"交替两招即可零伤通关"的免费解，M1 解决。
 
+> **只有 5 分钟？** 读 [GAME_DESIGN §0 一页读懂](doc/GAME_DESIGN.md)——这游戏是什么、一场战斗长什么样、现在在哪。
+
 ---
 
 ## 快速开始
@@ -43,7 +45,7 @@ godot --path .                    # 或用 Godot 编辑器打开项目后 F5
 | 文档 | 作用 |
 |------|------|
 | [ROADMAP](doc/ROADMAP.md) | **现在在哪、下一步做什么、怎么算做完**（排期与验收门的唯一依据） |
-| [GAME_DESIGN](doc/GAME_DESIGN.md) | 产品与玩法设计：核心模型、颜色语言、敌人法则、验收标准 |
+| [GAME_DESIGN](doc/GAME_DESIGN.md) | 产品与玩法设计。**先读 §0 一页读懂**；§2.5 是短促交锋的完整推理，其余是展开 |
 | [DEV_GUIDE](doc/DEV_GUIDE.md) | 技术：架构、模块边界、引擎坑、实现约定、变更日志 |
 | [BACKLOG](doc/BACKLOG.md) | 待办池：想到的、暂缓的、待拍板的 |
 | [doc/archive](doc/archive/) | 历史决策存档（**不再是现行依据**） |
