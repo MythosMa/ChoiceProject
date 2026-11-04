@@ -10,6 +10,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     public Hitbox attackHitbox { get; private set; }
 
     [Export]
+    public string displayName = "敌人";
+
+    [Export]
     public int maxHP = 50;
 
     /// <summary>练习木桩模式：血量改用 trainingHP，方便反复练读招/骗招而不打死敌人。</summary>
@@ -33,6 +36,7 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     private bool _dead;
 
     public int HP => _hp;
+    public int MaxHP => _maxHp;
 
     public override void _Ready()
     {
@@ -60,10 +64,10 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         {
             return false;
         }
-        string moveId = move?.moveName ?? "Unknown";
+        string moveId = move != null ? move.Id : "Unknown";
         if (enemyStateMachine.IsArmoredAgainst(moveId))
         {
-            PunishRead(moveId);
+            PunishRead(move);
             return false;
         }
         EnemyStateMachine.Phase phase = enemyStateMachine.CurrentPhase;
@@ -88,9 +92,10 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         }
 
         _hp = Mathf.Max(0, _hp - finalDamage);
-        enemyStateMachine.RegisterHit(moveId);
+        string moveLabel = move != null ? move.displayName : "?";
+        GD.Print($"{tag}（{moveLabel}），敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");   // 先报伤害，再报识破（因果顺序）
+        enemyStateMachine.RegisterHit(move);
         enemyStateMachine.Interrupt();
-        GD.Print($"{tag}，敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");
 
         if (_hp <= 0)
         {
@@ -103,8 +108,10 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         return true;
     }
 
-    private void PunishRead(string moveId)
+    private void PunishRead(MoveData move)
     {
+        string moveLabel = move != null ? $"{move.displayName}（{move.Id}）" : "Unknown";
+        string moveId = move != null ? move.Id : "Unknown";
         Player player = GetTree().GetFirstNodeInGroup("Player") as Player;
         if (player == null)
         {
@@ -114,10 +121,11 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         MoveData counter = enemyStateMachine.attackMove;
         int punishDamage = Mathf.RoundToInt(counter.damage * armorPunishMultiplier);
 
+        GD.Print($"[架住] 你的 {moveLabel}已被识破，伤害无效，遭到 {punishDamage} 点反击");
+
         FeedbackSystem.Instance.RequestHitstop(counter.hitstopFrames);
         FeedbackSystem.Instance.RequestShake(counter.hitstopFrames, counter.shakeMagnitude);
         player.TakeDamage(punishDamage, counter);
-
-        GD.Print($"霸体！你的{moveId}被招架了，遭到{punishDamage}点反击伤害");
+        enemyStateMachine.OnArmorPunishResolved();
     }
 }

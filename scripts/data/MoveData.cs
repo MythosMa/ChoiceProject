@@ -4,8 +4,18 @@ using System;
 [GlobalClass]
 public partial class MoveData : Resource
 {
+    [ExportGroup("标识")]
+    /// <summary>稳定标识：AI 读招、招式匹配、存档等一切"认招"的地方都用它。
+    /// 改它等于换一个招式身份；换资源文件而不改它，逻辑不受影响。</summary>
     [Export]
-    public string moveName = "default_data";
+    public string moveId = "unnamed";
+
+    /// <summary>显示名：只给人看（日志 / HUD）。随便改，不影响任何逻辑。</summary>
+    [Export]
+    public string displayName = "未命名";
+
+    /// <summary>取标识的统一入口：没配就回落到 "unnamed"，避免 null 传播。</summary>
+    public string Id => string.IsNullOrEmpty(moveId) ? "unnamed" : moveId;
 
     [ExportGroup("资源消耗")]
     [Export]
@@ -34,6 +44,25 @@ public partial class MoveData : Resource
     public Vector2 hitboxOffset = Vector2.Zero; // Hitbox 偏移
     [Export]
     public Vector2 hitboxSize = Vector2.Zero; // Hitbox 大小
+
+    [ExportGroup("出招位移（相对朝向，像素）")]
+    /// <summary>起手段位移：负数=向后拉（蓄力感）。总位移按段帧数均摊。</summary>
+    [Export]
+    public float startupShift = 0f;
+    /// <summary>判定期位移：正数=向前冲（突进）。判定框跟着身体走，等于动态延长攻击距离。</summary>
+    [Export]
+    public float activeShift = 0f;
+    /// <summary>后摇段位移：负数=回收（回原位）。</summary>
+    [Export]
+    public float recoveryShift = 0f;
+
+    [ExportGroup("表现")]
+    /// <summary>招式主色：挥击块 / 命中火花都用它。轻拳冷、重拳暖。</summary>
+    [Export]
+    public Color accentColor = new Color(1f, 0.9f, 0.4f);
+    /// <summary>命中火花粒子数（轻招少、重招多）。</summary>
+    [Export]
+    public int sparkAmount = 14;
 
     [ExportGroup("移动锁定")]
     [Export]

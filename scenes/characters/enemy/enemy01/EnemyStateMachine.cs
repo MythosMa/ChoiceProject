@@ -22,13 +22,19 @@ public partial class EnemyStateMachine : Node
     [Export]
     public float punishRange = 140.0f;
 
+    /// <summary>
+    /// 允许的"同名命中"次数。达到后敌人武装识破：
+    /// 下一次**同一招**会被架住并反击（换招则不受影响）。
+    /// 语义是"允许次数"，所以 2 = 第 3 次同招被架住（2026-11-04 由 3 改为 2）。
+    /// </summary>
     [Export]
-    public int greedThreshold = 3; // 预研ai,当同一招式命中后，预判反制
+    public int greedThreshold = 2;
 
     [Export]
     public int greedWindowFrames = 120; // 预研ai, 未被同一招打中持续时长后，放弃预判
 
     private string _lastMoveId;
+    private MoveData _lastMove;
     private int _repeatCount;
     private int _greedTimer;
     private string _predictedMoveId; // 反制针对的招式i
@@ -142,8 +148,9 @@ public partial class EnemyStateMachine : Node
         return match && armoredPhase;
     }
 
-    public void RegisterHit(string moveId)
+    public void RegisterHit(MoveData move)
     {
+        string moveId = move != null ? move.Id : "Unknown";
         if (moveId == _lastMoveId)
         {
             _repeatCount++;
@@ -153,6 +160,7 @@ public partial class EnemyStateMachine : Node
             _lastMoveId = moveId;
             _repeatCount = 1;
         }
+        _lastMove = move;
 
         _greedTimer = greedWindowFrames;
     }
@@ -172,11 +180,33 @@ public partial class EnemyStateMachine : Node
         {
             _predictedMoveId = _lastMoveId;
             _repeatCount = 0;
-            GD.Print($"你的意图被识破了 {_predictedMoveId}被预判");
+            string display = _lastMove != null ? _lastMove.displayName : _predictedMoveId;
+            GD.Print($"[识破] 敌人预判了你的 {display}（{_predictedMoveId}）—— 再打同一招会被架住并反击");
             EnterPhase(Phase.Startup);
             return;
         }
         EnterPhase(Phase.Hitstun);
+    }
+
+    /// <summary>
+    /// 霸体反打命中后的收尾（2026-11-04）。
+    ///
+    /// 一次"架住"就是这一回合的结算，敌人不再继续挥这一刀。否则会出现**因果倒挂**：
+    /// 玩家被架住（-18）→ 敌人这刀打空 → 敌人踉跄 → 玩家白拿 ×3。
+    ///
+    /// 后摇里的"架住"只清预判标记（后摇是它应得的破绽，不打断）；
+    /// 前摇/判定里的"架住"直接收招回 Idle —— 玩家此时仍在硬直，回合归敌人。
+    /// </summary>
+    public void OnArmorPunishResolved()
+    {
+        _predictedMoveId = null;
+        _nextAttack = null;
+        _enemy.attackHitbox.SetActive(false);
+
+        if (_phase == Phase.Startup || _phase == Phase.Active)
+        {
+            EnterPhase(Phase.Idle);
+        }
     }
 
     private bool TryStartWhiffPunish()
@@ -201,7 +231,7 @@ public partial class EnemyStateMachine : Node
         _nextAttack = punishMove;
         _predictedMoveId = null;
         EnterPhase(Phase.Startup);
-        GD.Print("[反制] 招式挥空，dir发动反制！");
+        GD.Print("[反制] 挥空被抓住，反斩！");
         return true;
     }
 

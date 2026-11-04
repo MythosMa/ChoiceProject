@@ -4,20 +4,13 @@ public partial class CombatHandler : Node, IInputReceiver
 {
 	private enum Segment { Startup, Active, Recovery }
 
+	/// <summary>轻攻击（Z / A）。</summary>
 	[Export]
-	public MoveData openerMove;
+	public MoveData lightMove;
 
+	/// <summary>重攻击（X / S）。2026-11-04 起由按键决定，不再由方向决定。</summary>
 	[Export]
-	public MoveData moveUp;
-
-	[Export]
-	public MoveData moveDown;
-
-	[Export]
-	public MoveData moveLeft;
-
-	[Export]
-	public MoveData moveRight;
+	public MoveData heavyMove;
 
 	[Export] public int chainCap = 3;     // 占位最大链长
 
@@ -46,8 +39,10 @@ public partial class CombatHandler : Node, IInputReceiver
 	public void Enter()
 	{
 		_chainHits = 1;
-		Direction dir = Tools.GetDirection(InputManager.Instance.Current);
-		if (!StartMove(SelectMove(dir), ResolveAttackFacing(dir)))
+		InputManager input = InputManager.Instance;
+		AttackType pressed = Tools.GetAttack(Tools.GetPressed(input.Previous, input.Current));
+		Direction dir = Tools.GetDirection(input.Current);
+		if (!StartMove(SelectMove(pressed), ResolveAttackFacing(dir)))
 		{
 			_move = null;
 		}
@@ -60,6 +55,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		SetVisual(Colors.White);
 		_move = null;
 		player.WhiffPunishable = false;
+		player.combatVelocityX = 0f;
 	}
 
 	public void Tick(double delta)
@@ -88,7 +84,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		_hitbox.Configure(move, facing);
 
 
-		GD.Print($"连段第 {_chainHits} 击: {move.moveName}");
+		DebugLog.V($"连段第 {_chainHits} 击: {move.displayName}");
 		ApplySegmentVisual();
 		SyncHitbox();
 
@@ -135,12 +131,49 @@ public partial class CombatHandler : Node, IInputReceiver
 		if (_prevSegment == Segment.Active && seg == Segment.Recovery && !_hitbox.hasConnected && !_move.dodgeCancellable)
 		{
 			player.WhiffPunishable = true;
-			GD.Print($"[挥空] {_move.moveName}挥空，露出破绽~");
+			GD.Print($"[挥空] {_move.displayName}挥空，露出破绽");
 		}
 		_prevSegment = seg;
 
 		SyncHitbox();
 		ApplySegmentVisual();
+		ApplySegmentShift();
+	}
+
+	/// <summary>
+	/// 把 MoveData 的三段位移（像素）换算成本帧速度，交给 Player 统一积分。
+	/// 位移按段帧数均摊，所以"总位移"对设计师是可读的；判定框是身体子节点，会跟着一起动——
+	/// 等于判定期前冲会动态延长攻击距离（这是有意的，后续突进/升龙类招式直接复用）。
+	/// </summary>
+	private void ApplySegmentShift()
+	{
+		Segment seg = CurrentSegment();
+		float shift;
+		int frames;
+
+		switch (seg)
+		{
+			case Segment.Startup:
+				shift = _move.startupShift;
+				frames = _move.startupFrames;
+				break;
+			case Segment.Active:
+				shift = _move.activeShift;
+				frames = _move.activeFrames;
+				break;
+			default:
+				shift = _move.recoveryShift;
+				frames = _move.recoveryFrames;
+				break;
+		}
+
+		if (frames <= 0 || Mathf.IsZeroApprox(shift))
+		{
+			player.combatVelocityX = 0f;
+			return;
+		}
+
+		player.combatVelocityX = shift / frames * 60f * player.facing;
 	}
 
 	private void SyncHitbox()
@@ -165,18 +198,28 @@ public partial class CombatHandler : Node, IInputReceiver
 
 	private void ApplySegmentVisual()
 	{
+		if (_move == null)
+		{
+			return;
+		}
+
+		Color accent = _move.accentColor;
+
 		switch (CurrentSegment())
 		{
 			case Segment.Startup:
+				// 身体用相位色（黄=起手），预演框用招式色（半透明）——两个通道各管一件事
 				SetVisual(new Color(1.0f, 0.85f, 0.0f));
-				_hitbox.ShowThreat(new Color(1.0f, 0.85f, 0.0f, 0.35f));
+				_hitbox.ShowThreat(new Color(accent.R, accent.G, accent.B, 0.3f));
 				break;
 			case Segment.Active:
+				// 身体仍然红（相位），但挥击块是实心招式色：轻拳细长冷色、重拳粗壮暖色
 				SetVisual(new Color(1.0f, 0.1f, 0.1f));
-				_hitbox.ShowThreat(new Color(1.0f, 0.1f, 0.1f, 0.6f));
+				_hitbox.ShowSwing(accent);
 				break;
 			case Segment.Recovery:
 				SetVisual(new Color(0.1f, 1.0f, 0.4f));
+				_hitbox.HideThreat();   // 后摇不该再显示攻击范围
 				break;
 		}
 	}
@@ -186,18 +229,16 @@ public partial class CombatHandler : Node, IInputReceiver
 		player.GetNode<Sprite2D>("Sprite2D").Modulate = color;
 	}
 
-	private MoveData SelectMove(Direction dir)
+	/// <summary>
+	/// 选招：由**按下的攻击键**决定，不再由方向决定（2026-11-04）。
+	/// Z / A = 轻攻击；X / S = 重攻击。同时按下轻重时重攻击优先。
+	/// 方向只负责"朝哪打"（ResolveAttackFacing），不负责"用哪招"。
+	/// </summary>
+	private MoveData SelectMove(AttackType attack)
 	{
-		MoveData m = dir switch
-		{
-			Direction.Up => moveUp,
-			Direction.Down => moveDown,
-			Direction.Left => moveLeft,
-			Direction.Right => moveRight,
-			_ => openerMove,
-		};
-
-		return m ?? openerMove;
+		bool heavy = (attack & (AttackType.HP | AttackType.HK)) != 0;
+		MoveData m = heavy ? heavyMove : lightMove;
+		return m ?? lightMove;
 	}
 
 	private MoveData ResolveNext(out Direction dir)
@@ -219,7 +260,7 @@ public partial class CombatHandler : Node, IInputReceiver
 			if ((prev & rec.Attack) != rec.Attack)
 			{
 				dir = rec.Direction;
-				return SelectMove(dir);
+				return SelectMove(rec.Attack);
 			}
 		}
 		return null;

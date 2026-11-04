@@ -1,8 +1,10 @@
-[gd_scene load_steps=3 format=3 uid="uid://d288vuhp41h8p"]
+[gd_scene load_steps=4 format=3 uid="uid://d288vuhp41h8p"]
 
 [ext_resource type="Script" uid="uid://b45ko8hyye7u1" path="res://scenes/characters/player/CombatHandler.cs" id="1_vama5"]
-[ext_resource type="Resource" uid="uid://cdipv2rrpubs5" path="res://resources/move/action_1.tres" id="2_hw6km"]
+[ext_resource type="Resource" uid="uid://cy1fc10ysgq4o" path="res://resources/move/test_light_punch.tres" id="2_light"]
+[ext_resource type="Resource" uid="uid://bh4hmjswvfejk" path="res://resources/move/test_heavy_punch.tres" id="3_heavy"]
 
 [node name="CombatHandler" type="Node" unique_id=809220710]
 script = ExtResource("1_vama5")
-openerMove = ExtResource("2_hw6km")
+lightMove = ExtResource("2_light")
+heavyMove = ExtResource("3_heavy")

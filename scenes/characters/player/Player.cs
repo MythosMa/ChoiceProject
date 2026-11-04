@@ -23,6 +23,9 @@ public partial class Player : CharacterBody2D, IDamageable
 
 	public int facing = 1;
 	public float moveAxis;
+
+	/// <summary>招式位移速度（px/s，已按朝向换算）。由 CombatHandler 每帧写入，Player 统一应用。</summary>
+	public float combatVelocityX;
 	private bool jumpRequested = false;
 	private bool _hitstunRequested = false;
 	public void RequestJump() => jumpRequested = true;
@@ -68,6 +71,7 @@ public partial class Player : CharacterBody2D, IDamageable
 		}
 		moveAxis = 0;
 		jumpRequested = false;
+		combatVelocityX = 0;
 		inputStateMachine.Tick(delta);
 
 		if (moveAxis != 0)
@@ -87,6 +91,7 @@ public partial class Player : CharacterBody2D, IDamageable
 		}
 
 		velocity.X = moveAxis != 0 ? moveAxis * Speed : Mathf.MoveToward(Velocity.X, 0, Speed);
+		velocity.X += combatVelocityX;
 
 		Velocity = velocity;
 		MoveAndSlide();
@@ -111,7 +116,8 @@ public partial class Player : CharacterBody2D, IDamageable
 		}
 		_hp = Mathf.Max(0, _hp - damageAmount);
 		_hitstunRequested = true;
-		GD.Print($"被攻击： -{damageAmount}, HP: {_hp} / {maxHP}");
+		string from = move != null ? move.displayName : "?";
+		GD.Print($"被攻击（{from}）： -{damageAmount}, HP: {_hp} / {maxHP}");
 		if (_hp <= 0)
 		{
 			GD.Print("Game Over!");

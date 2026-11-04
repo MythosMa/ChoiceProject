@@ -4,7 +4,8 @@
 
 [resource]
 script = ExtResource("1_1ihgx")
-moveName = "enemy01_attack"
+moveId = "enemy01_attack"
+displayName = "直拳"
 startupFrames = 30
 activeFrames = 6
 recoveryFrames = 40

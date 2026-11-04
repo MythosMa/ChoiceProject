@@ -4,13 +4,19 @@
 
 [resource]
 script = ExtResource("1_buxne")
-moveName = "heavy"
+moveId = "test_heavy_punch"
+displayName = "重拳"
 energyCost = 30
 startupFrames = 12
 activeFrames = 5
 recoveryFrames = 16
 damage = 14
-hitboxOffset = Vector2(70, 0)
-hitboxSize = Vector2(100, 24)
+startupShift = -4.0
+activeShift = 12.0
+recoveryShift = -8.0
+hitboxOffset = Vector2(78, 0)
+hitboxSize = Vector2(120, 34)
+accentColor = Color(1, 0.55, 0.15, 1)
+sparkAmount = 28
 dodgeCancellable = false
 metadata/_custom_type_script = "uid://duwjwvk4spb8q"

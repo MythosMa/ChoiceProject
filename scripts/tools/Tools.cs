@@ -4,6 +4,9 @@ using System.Collections.Generic;
 
 public static partial class Tools
 {
+	/// <summary>敌人身体（CharacterBody2D）所在层：2D 物理层 6，位值 1&lt;&lt;5。</summary>
+	public const uint EnemyBodyLayer = 1u << 5;
+
 	private static readonly Dictionary<Direction, string> DirectionArrows = new()
 	{
 		{ Direction.Neutral, "N" },

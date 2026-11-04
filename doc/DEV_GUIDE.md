@@ -1,7 +1,10 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.20  |  日期：2026-11-04  |  状态：**M0 基座收口**（新阶段启动；排期与验收门已移交 `ROADMAP.md`）
+> 版本：v0.21  |  日期：2026-11-04  |  状态：**M0 基座收口**（新阶段启动；排期与验收门已移交 `ROADMAP.md`）
 >
+> **v0.21 变更（2026-11-04）：** 识破语义修正——`greedThreshold` 从"第 N 次命中触发"改为"**允许 N 次同名命中**"（默认 2），
+> 即**第 3 次同招被架住、伤害无效**；伤害日志改为先于识破日志输出（原来打印顺序把因果讲反了）。
+> 旧的 `greedThreshold=3` 描述只存在于本节历史记录里，**现行数值以 `COMBAT_SPEC` 为准**。
 > **v0.20 变更（2026-11-04，破坏性）：** ①**开发方式切换**——实现交给 AI，人负责方向与验收，批量交付+断言验收（详见 ROADMAP §一）；②**阶段表移交**——§七 的 Phase 0–4 任务表冻结为历史记录，现行计划改为 ROADMAP 的 M0–M8；③**产品模型收编**——「非对称赌注 + 被读重罚 + 欺骗」从本文件迁入 `GAME_DESIGN` §2.5，产品决策不再住在开发日志里；④**目录结构/文档分工**更新；⑤核心模型定为**短促交锋**（敌人必须有回合）。
 > v0.19 变更：第一批止血（出招朝向 bug、调试日志闸门、失效属性/占位招清理、练习木桩模式、测试场景 HP 复原）＋ headless 基线实测。**实测结论：同名 spam 被识破反击打死、交替两招 3 秒 0 伤通关——两端都是极端值，中间没有梯度。** 下一刀的方向因此从"加机制"改为"给敌人回合"。
 > v0.18 变更：第二刀取向 P **手感验收通过**（用户"有点意思了"）；新增基石② 落地机制 **取向 R**（见 §七 S3「取向R」）——`MoveData.dodgeCancellable` 单字段驱动"承诺招不可闪避取消 + 挥空可被抓"，`EnemyStateMachine.TryStartWhiffPunish` 在 Idle/Recovery 起长距离快反斩。修复反斩污染识破状态的三重 bug（起手清空 `_predictedMoveId`），红线代码推论固化。
@@ -56,7 +59,8 @@ choice_project/
 │   ├── ui/
 │   │   ├── hud/                              # HP / 气
 │   │   └── input_test/                       # 输入历史面板
-│   └── test_scenes/                          # 测试场景（当前 main scene 在此）
+│   ├── arena/                                # 试玩场景（当前 main scene）
+│   └── test_scenes/                          # 调试沙盒（不进正式流程）
 │
 ├── scripts/                          # 纯逻辑/数据，不依赖场景节点
 │   ├── data/                         # InputButtons/Direction/AttackType/InputRecord/MoveData
@@ -251,7 +255,7 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
 - `IDamageable`（文件名有 typo：`IDamanageable.cs`）：`bool TakeDamage(int damageAmount)`——**返回 bool** 表示这次伤害是否真正生效（S2 从 `void` 改来，用于让无敌/免伤挡掉反馈，见下方 Hitbox）。
 
 **MoveData（`scripts/data/MoveData.cs`，`[GlobalClass]` Resource，玩家与敌人共用）**
-字段：`moveName`；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
+字段：**`moveId`（身份，AI 认招用它；2026-11-04 由 `moveName` 拆出）**、`displayName`（只给人看）；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`startupShift/activeShift/recoveryShift`（三段出招位移，2026-11-04 加）；`accentColor/sparkAmount`（表现，2026-11-04 加）；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
 
 **中断优先级（决策，GAME_DESIGN §6 未落档，此处固化）**
 > 受击(hitstun) > 闪避(dodge) > 顿帧门(hitstop gate) > 普通 Tick。**例外：闪避无敌期内被命中 → 命中无效**（在 `TakeDamage` 层挡，不触发受击）。
@@ -292,6 +296,9 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
   - **为什么不用代码 new：** 未来不同敌人需要**手编辑**的判定形状（尺寸/偏移各异），"编辑器预设 + 按实例独立"既保证可手编、又消除共享，优于运行时 `new RectangleShape2D()`。
   - 运行时代码只**读取/微调**预设形状（如按 MoveData 覆盖 size/offset），不负责创建。
   - **S2 建议（多敌人时）：** 敌人一多，逐个唯一化容易漏。**在 Hurtbox.tscn / Hitbox.tscn 的源 Shape 上勾一次 `本地到场景`**，之后所有实例自动独立、零心智负担；已唯一化的玩家实例保持不变即可，两者结果等价、可共存。
+
+- **回合归属（2026-11-04 立为全局铁律）：** 每次交互结算后必须能回答"这一回合归谁"；**任何让被惩罚方同时获益的分支都是 bug**。
+  完整自查清单与两次事故记录见 [`COMBAT_SPEC`](COMBAT_SPEC.md) §〇。新增状态机分支、"给奖励"的分支时先过那张表。
 
 - **战斗判定碰撞分层（S1 约定，2026-09-12）：** Hitbox/Hurtbox 都是 Area2D，靠 `area_entered` 互相检测。Godot 默认所有 Area 都在物理层 1 / 掩码 1——这会让**玩家自己的 Hitbox 检测到自己的 Hurtbox（出招即自伤）**，且敌我判定全混在一层、无法区分。故给战斗判定 Area 单独分层（在 **项目设置 → 层名称 → 2D 物理** 命名）：
 

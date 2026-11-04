@@ -4,7 +4,8 @@
 
 [resource]
 script = ExtResource("1_8sgyf")
-moveName = "enemy_punish"
+moveId = "enemy_punish"
+displayName = "反斩"
 startupFrames = 6
 recoveryFrames = 14
 hitstopFrames = 8
