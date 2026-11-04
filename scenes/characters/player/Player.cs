@@ -28,6 +28,9 @@ public partial class Player : CharacterBody2D, IDamageable
 	/// 与 moveAxis 分开，是为了"移动有加减速、招式/闪避是瞬时"。</summary>
 	public float externalVelocityX;
 
+	/// <summary>移动自身的速度分量（不含外部驱动）。</summary>
+	private float _moveSpeedX;
+
 	/// <summary>地面加速/减速帧数（从静止到全速 / 从全速到静止）。</summary>
 	[Export]
 	public float groundAccelFrames = 6f;
@@ -97,12 +100,15 @@ public partial class Player : CharacterBody2D, IDamageable
 			velocity.Y = JumpVelocity;
 		}
 
-		// 移动带加减速；招式位移 / 闪避冲刺走 externalVelocityX，保持瞬时
+		// 移动带加减速，但**独立累计**，不能从 Velocity 反读——
+		// 否则 externalVelocityX（闪避冲刺）会被逐帧叠加，越闪越快。
 		float targetX = moveAxis * Speed;
 		float smoothingFrames = Mathf.Abs(targetX) > 0.01f ? groundAccelFrames : groundDecelFrames;
 		float rate = Speed / Mathf.Max(1f, smoothingFrames);
-		velocity.X = Mathf.MoveToward(velocity.X, targetX, rate * 60f * (float)delta);
-		velocity.X += externalVelocityX;
+		_moveSpeedX = Mathf.MoveToward(_moveSpeedX, targetX, rate * 60f * (float)delta);
+
+		// 外部驱动（闪避冲刺 / 招式位移）优先：它是一个**定速**，不是叠加量
+		velocity.X = Mathf.Abs(externalVelocityX) > 0.01f ? externalVelocityX : _moveSpeedX;
 
 		Velocity = velocity;
 		MoveAndSlide();
