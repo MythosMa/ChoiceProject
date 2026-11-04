@@ -156,6 +156,7 @@ public partial class EnemyStateMachine : Node
                 }
                 break;
         }
+        ApplySegmentShift();
         ApplyTelegraph();
     }
 
@@ -320,6 +321,56 @@ public partial class EnemyStateMachine : Node
         {
             _facing = _player.GlobalPosition.X >= _enemy.GlobalPosition.X ? 1 : -1;
         }
+    }
+
+    /// <summary>
+    /// 按招式三段位移驱动敌人移动。
+    /// 出招阶段的 activeShift 就是"突进"——让它不再是固定靶，也让玩家没法纯靠拉开距离等挥空。
+    /// </summary>
+    private void ApplySegmentShift()
+    {
+        _enemy.externalVelocityX = 0f;
+        if (_currentMove == null)
+        {
+            return;
+        }
+
+        float shift;
+        int frames;
+        switch (_phase)
+        {
+            case Phase.Startup:
+                shift = _currentMove.startupShift;
+                frames = _currentMove.startupFrames;
+                break;
+            case Phase.Active:
+                shift = _currentMove.activeShift;
+                frames = _currentMove.activeFrames;
+                break;
+            case Phase.Recovery:
+                shift = _currentMove.recoveryShift;
+                frames = _currentMove.recoveryFrames;
+                break;
+            default:
+                return;
+        }
+
+        if (frames <= 0 || Mathf.IsZeroApprox(shift))
+        {
+            return;
+        }
+
+        // 位移方向直接用"朝玩家"，不依赖 _facing（避免转身未更新导致突进方向反了）
+        int toward = _facing;
+        if (_player != null)
+        {
+            float dx = _player.GlobalPosition.X - _enemy.GlobalPosition.X;
+            if (Mathf.Abs(dx) > 1f)
+            {
+                toward = dx > 0f ? 1 : -1;
+            }
+        }
+        _enemy.externalVelocityX = shift / frames * 60f * toward;
     }
 
     private void ApplyTelegraph()

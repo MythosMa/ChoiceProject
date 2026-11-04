@@ -52,6 +52,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         enemyStateMachine.Initialize(this);
     }
 
+    /// <summary>招式位移速度（px/s，已按朝向换算），由 EnemyStateMachine 每帧写入。</summary>
+    public float externalVelocityX;
+
     public override void _PhysicsProcess(double delta)
     {
         if (_dead)
@@ -63,6 +66,10 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
             return;
         }
         enemyStateMachine.Tick(delta);
+
+        // 敌人现在会走：出招突进也走这条路（数据在 MoveData 的三段位移里）
+        Velocity = new Vector2(externalVelocityX, Velocity.Y);
+        MoveAndSlide();
     }
 
     public bool TakeDamage(int damageAmount, MoveData move)
