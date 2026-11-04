@@ -55,6 +55,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		SetVisual(Colors.White);
 		_move = null;
 		player.WhiffPunishable = false;
+		player.combatVelocityX = 0f;
 	}
 
 	public void Tick(double delta)
@@ -136,6 +137,43 @@ public partial class CombatHandler : Node, IInputReceiver
 
 		SyncHitbox();
 		ApplySegmentVisual();
+		ApplySegmentShift();
+	}
+
+	/// <summary>
+	/// 把 MoveData 的三段位移（像素）换算成本帧速度，交给 Player 统一积分。
+	/// 位移按段帧数均摊，所以"总位移"对设计师是可读的；判定框是身体子节点，会跟着一起动——
+	/// 等于判定期前冲会动态延长攻击距离（这是有意的，后续突进/升龙类招式直接复用）。
+	/// </summary>
+	private void ApplySegmentShift()
+	{
+		Segment seg = CurrentSegment();
+		float shift;
+		int frames;
+
+		switch (seg)
+		{
+			case Segment.Startup:
+				shift = _move.startupShift;
+				frames = _move.startupFrames;
+				break;
+			case Segment.Active:
+				shift = _move.activeShift;
+				frames = _move.activeFrames;
+				break;
+			default:
+				shift = _move.recoveryShift;
+				frames = _move.recoveryFrames;
+				break;
+		}
+
+		if (frames <= 0 || Mathf.IsZeroApprox(shift))
+		{
+			player.combatVelocityX = 0f;
+			return;
+		}
+
+		player.combatVelocityX = shift / frames * 60f * player.facing;
 	}
 
 	private void SyncHitbox()

@@ -45,6 +45,17 @@ public partial class MoveData : Resource
     [Export]
     public Vector2 hitboxSize = Vector2.Zero; // Hitbox 大小
 
+    [ExportGroup("出招位移（相对朝向，像素）")]
+    /// <summary>起手段位移：负数=向后拉（蓄力感）。总位移按段帧数均摊。</summary>
+    [Export]
+    public float startupShift = 0f;
+    /// <summary>判定期位移：正数=向前冲（突进）。判定框跟着身体走，等于动态延长攻击距离。</summary>
+    [Export]
+    public float activeShift = 0f;
+    /// <summary>后摇段位移：负数=回收（回原位）。</summary>
+    [Export]
+    public float recoveryShift = 0f;
+
     [ExportGroup("表现")]
     /// <summary>招式主色：挥击块 / 命中火花都用它。轻拳冷、重拳暖。</summary>
     [Export]

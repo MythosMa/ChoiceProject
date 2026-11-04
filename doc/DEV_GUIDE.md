@@ -255,7 +255,7 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
 - `IDamageable`（文件名有 typo：`IDamanageable.cs`）：`bool TakeDamage(int damageAmount)`——**返回 bool** 表示这次伤害是否真正生效（S2 从 `void` 改来，用于让无敌/免伤挡掉反馈，见下方 Hitbox）。
 
 **MoveData（`scripts/data/MoveData.cs`，`[GlobalClass]` Resource，玩家与敌人共用）**
-字段：**`moveId`（身份，AI 认招用它；2026-11-04 由 `moveName` 拆出）**、`displayName`（只给人看）；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`accentColor/sparkAmount`（表现，2026-11-04 加）；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
+字段：**`moveId`（身份，AI 认招用它；2026-11-04 由 `moveName` 拆出）**、`displayName`（只给人看）；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`startupShift/activeShift/recoveryShift`（三段出招位移，2026-11-04 加）；`accentColor/sparkAmount`（表现，2026-11-04 加）；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
 
 **中断优先级（决策，GAME_DESIGN §6 未落档，此处固化）**
 > 受击(hitstun) > 闪避(dodge) > 顿帧门(hitstop gate) > 普通 Tick。**例外：闪避无敌期内被命中 → 命中无效**（在 `TakeDamage` 层挡，不触发受击）。
