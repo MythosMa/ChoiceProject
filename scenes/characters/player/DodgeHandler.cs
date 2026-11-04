@@ -9,7 +9,6 @@ public partial class DodgeHandler : Node, IInputReceiver
     public int cooldownFrames = 60;
 
     private int _frame;
-    private Direction _dodgeDirection;
     private uint _savedMask;
 
     public Player player { get; set; }

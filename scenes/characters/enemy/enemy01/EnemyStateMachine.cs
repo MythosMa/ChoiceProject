@@ -201,7 +201,7 @@ public partial class EnemyStateMachine : Node
         _nextAttack = punishMove;
         _predictedMoveId = null;
         EnterPhase(Phase.Startup);
-        GD.Print("[反制] 招式挥空，dir发动反制！");
+        GD.Print("[反制] 挥空被抓住，反斩！");
         return true;
     }
 
