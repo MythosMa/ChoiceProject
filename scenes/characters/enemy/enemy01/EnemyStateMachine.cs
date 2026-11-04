@@ -329,15 +329,26 @@ public partial class EnemyStateMachine : Node
             _ => Colors.White,
         };
 
-        // 通道二：金边表示"免疫"（"能不能打"），贯穿 Startup/Active；解围时额外闪烁
+        // 通道二：描边 = "免疫"（能不能打）。两种免疫必须一眼分得开：
+        //   白色细边（常亮）  = 识破某招 —— 换招可打穿
+        //   金色粗边（会闪）  = 解围    —— 只能躲
         bool immune = _burstArmor || _predictedMoveId != null;
         if (_outline != null)
         {
             _outline.Visible = immune;
             if (immune)
             {
-                bool blink = _burstArmor && (_frame / 3) % 2 == 0;
-                _outline.Modulate = new Color(1.0f, 0.75f, 0.1f, blink ? 0.3f : 1.0f);
+                if (_burstArmor)
+                {
+                    bool blink = (_frame / 3) % 2 == 0;
+                    _outline.Scale = new Vector2(2.6f, 2.6f);
+                    _outline.Modulate = new Color(1.0f, 0.72f, 0.05f, blink ? 0.45f : 1.0f);
+                }
+                else
+                {
+                    _outline.Scale = new Vector2(2.35f, 2.35f);
+                    _outline.Modulate = new Color(0.95f, 0.95f, 0.95f, 0.85f);
+                }
             }
         }
 
