@@ -34,6 +34,9 @@ public partial class TestRunner : Node
         await RunSafe("A5 被识破的第 3 次同招不造成伤害", TestReadNullifiesThirdHit);
         await RunSafe("A6 架住之后敌人不再挥空踉跄", TestNoStaggerAfterArmorPunish);
         await RunSafe("A7 招式身份可配置且唯一（AI 读招不依赖代码硬编码）", TestMoveIdentity);
+        await RunSafe("A8 交替两招连打会触发解围（免费解消失）", TestBurstOnAlternating);
+        await RunSafe("A9 打两下就收手不触发解围", TestNoBurstWhenBackingOff);
+        await RunSafe("A10 一次压力周期只触发一次解围", TestSingleBurstPerCycle);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -185,6 +188,88 @@ public partial class TestRunner : Node
         player.invincible = true;
         fixture.QueueFree();
         await Frames(1);
+    }
+
+
+    /// <summary>
+    /// 交替 jab/heavy 贴脸连打，返回这段期间新增的解围次数。
+    /// 交替是为了绕开"同名读"，专测压力读。
+    /// </summary>
+    private async Task<int> RunAlternatingAndCountBursts(int maxFrames)
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        int before = enemy.BurstCount;
+        int frames = 0;
+        bool pressed = false;
+
+        while (frames < maxFrames)
+        {
+            if (frames % 20 == 0)
+            {
+                bool heavy = (frames / 20) % 2 == 1;
+                _wasHeavy = heavy;
+                player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+                Input.ActionPress(heavy ? "heavy_punch" : "light_punch");
+                pressed = true;
+            }
+            else if (pressed)
+            {
+                Input.ActionRelease(_wasHeavy ? "heavy_punch" : "light_punch");
+                pressed = false;
+            }
+
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            frames++;
+        }
+
+        Input.ActionRelease("light_punch");
+        Input.ActionRelease("heavy_punch");
+        int bursts = enemy.BurstCount - before;
+
+        fixture.QueueFree();
+        await Frames(1);
+        return bursts;
+    }
+
+    /// <summary>A8：交替两招连打必须触发解围——这是"免费解消失"的核心断言。</summary>
+    private async Task TestBurstOnAlternating()
+    {
+        int bursts = await RunAlternatingAndCountBursts(400);
+        Check(bursts >= 1, $"交替连打 400 帧没有触发任何解围（免费解仍在）");
+    }
+
+    /// <summary>A9：只打两下就收手，压力到不了顶，不应触发解围。</summary>
+    private async Task TestNoBurstWhenBackingOff()
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        int before = enemy.BurstCount;
+
+        for (int i = 0; i < 2; i++)
+        {
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+            await Frames(21);
+        }
+
+        Check(enemy.Pressure < enemy.PressureMax, $"打两下压力就满了（{enemy.Pressure}/{enemy.PressureMax}）");
+        int afterHits = enemy.BurstCount;
+
+        await Frames(300); // 收手观望
+
+        Check(enemy.BurstCount == before && afterHits == before,
+            $"收手期间触发了 {enemy.BurstCount - before} 次解围");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A10：一次压力周期只该结算一次解围，后续命中不能重复触发。</summary>
+    private async Task TestSingleBurstPerCycle()
+    {
+        int bursts = await RunAlternatingAndCountBursts(600);
+        Check(bursts == 1, $"一次压力周期触发了 {bursts} 次解围（应为 1）");
     }
 
     /// <summary>
@@ -347,11 +432,13 @@ public partial class TestRunner : Node
     private async Task<int> RunScriptAlternating(int maxFrames)
     {
         (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
         int frames = 0;
         bool pressed = false;
 
         while (enemy.HP > 0 && frames < maxFrames)
         {
+            esm.Pressure.Reset(); // 基线只测纯输出，不让解围介入
             if (frames % 20 == 0)
             {
                 bool heavy = (frames / 20) % 2 == 1;
@@ -382,11 +469,13 @@ public partial class TestRunner : Node
     private async Task<int> RunScriptJabOnly(int maxFrames)
     {
         (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
         int frames = 0;
         bool pressed = false;
 
         while (frames < maxFrames)
         {
+            esm.Pressure.Reset(); // 对照口径同上
             if (frames % 20 == 0)
             {
                 player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);

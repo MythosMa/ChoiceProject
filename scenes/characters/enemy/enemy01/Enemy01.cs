@@ -38,6 +38,12 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     public int HP => _hp;
     public int MaxHP => _maxHp;
 
+    /// <summary>压力值（HUD 用）。</summary>
+    public int Pressure => enemyStateMachine.Pressure.Value;
+    public int PressureMax => enemyStateMachine.Pressure.Max;
+    /// <summary>累计解围次数（断言/调试用）。</summary>
+    public int BurstCount => enemyStateMachine.BurstCount;
+
     public override void _Ready()
     {
         _maxHp = trainingMode ? trainingHP : maxHP;
@@ -67,6 +73,17 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         string moveId = move != null ? move.Id : "Unknown";
         if (enemyStateMachine.IsArmoredAgainst(moveId))
         {
+            if (enemyStateMachine.IsBurstArmor)
+            {
+                // 解围是"全体霸体"：你这一下白打，但**不额外扣血、也不结束解围**，
+                // 解围会继续打出来——玩家必须躲或停手。
+                string label = move != null ? move.displayName : "?";
+                GD.Print($"[解围] 你的 {label} 被霸体挡下，伤害无效");
+                FeedbackSystem.Instance.RequestHitstop(4);
+                return false;
+            }
+
+            // 识破是"针对某招"：架住 + 反击，并且这一回合到此结算
             PunishRead(move);
             return false;
         }

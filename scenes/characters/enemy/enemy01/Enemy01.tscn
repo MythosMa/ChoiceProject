@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://dqillv5arvmal" path="res://scenes/combat/components/Hitbox.tscn" id="5_ady4a"]
 [ext_resource type="Resource" uid="uid://c2fe6bct17im5" path="res://scenes/characters/enemy/enemy01/Enemy01Punish.tres" id="6_tv226"]
 [ext_resource type="PackedScene" uid="uid://b5jqd46ydk0kg" path="res://scenes/combat/components/Hurtbox.tscn" id="6_xhuhs"]
+[ext_resource type="Resource" path="res://resources/move/enemy01_burst.tres" id="7_burst"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wt40p"]
 size = Vector2(32, 32)
@@ -22,6 +23,12 @@ collision_mask = 1
 script = ExtResource("1_a7k2l")
 enemyStateMachine = NodePath("EnemyStateMachine")
 attackHitbox = NodePath("Hitbox")
+
+[node name="Outline" type="Sprite2D" parent="." unique_id=570436662]
+visible = false
+modulate = Color(1, 0.75, 0.1, 1)
+scale = Vector2(2.5, 2.5)
+texture = ExtResource("1_wt40p")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=570436661]
 scale = Vector2(2, 2)
@@ -41,6 +48,7 @@ shape = SubResource("RectangleShape2D_1ihgx")
 script = ExtResource("3_h743h")
 attackMove = ExtResource("4_h743h")
 punishMove = ExtResource("6_tv226")
+burstMove = ExtResource("7_burst")
 punishRange = 170.0
 
 [node name="Hurtbox" parent="." unique_id=1020424420 instance=ExtResource("6_xhuhs")]
