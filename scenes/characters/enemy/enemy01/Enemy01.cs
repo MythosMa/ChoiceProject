@@ -25,8 +25,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     [Export]
     public float counterHitMultiplier = 2.0f;
 
+    /// <summary>被霸体架住时的反伤倍率：以**你打过来的招**的伤害为基数（重招被读代价更大）。</summary>
     [Export]
-    public float armorPunishMultiplier = 1.5f;
+    public float armorPunishMultiplier = 2.0f;
 
     [Export]
     public float staggerMultiplier = 3.0f;
@@ -97,10 +98,11 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
             finalDamage = Mathf.RoundToInt(damageAmount * staggerMultiplier);
             tag = "踉跄确反 * 3";
         }
-        else if (phase == EnemyStateMachine.Phase.Recovery)
+        else if (phase == EnemyStateMachine.Phase.Recovery && !attackHitbox.hasConnected)
         {
+            // 只有"它这刀打空了"才给双倍——否则盲打撞后摇也能白拿奖励
             finalDamage = Mathf.RoundToInt(damageAmount * counterHitMultiplier);
-            tag = "确反 * 2";
+            tag = "确反 * 2（扑空）";
         }
         else
         {
@@ -136,7 +138,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
             return;
         }
         MoveData counter = enemyStateMachine.attackMove;
-        int punishDamage = Mathf.RoundToInt(counter.damage * armorPunishMultiplier);
+        // 反伤按"你打过来的招"缩放：jab 被架住 -20，heavy 被架住 -52
+        int incoming = move != null ? move.damage : counter.damage;
+        int punishDamage = Mathf.RoundToInt(incoming * armorPunishMultiplier);
 
         GD.Print($"[架住] 你的 {moveLabel}已被识破，伤害无效，遭到 {punishDamage} 点反击");
 

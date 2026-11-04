@@ -38,6 +38,7 @@ public partial class TestRunner : Node
         await RunSafe("A9 打两下就收手不触发解围", TestNoBurstWhenBackingOff);
         await RunSafe("A10 一次压力周期只触发一次解围", TestSingleBurstPerCycle);
         await RunSafe("A12 识破后的反击能打到重拳最远射程", TestReadCounterReachesHeavyRange);
+        await RunSafe("A13 被架住的反伤随招式重量放大", TestPunishScalesWithMoveWeight);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -230,6 +231,43 @@ public partial class TestRunner : Node
         fixture.QueueFree();
         await Frames(1);
         return bursts;
+    }
+
+    /// <summary>
+    /// A13：被霸体架住的反伤必须随"你打过来的招"放大——
+    /// 重拳被读要比轻拳被读疼得多，否则"用重招"没有代价。
+    /// </summary>
+    private async Task TestPunishScalesWithMoveWeight()
+    {
+        int lightLoss = await RunThreeHitsAndMeasureLoss("light_punch");
+        int heavyLoss = await RunThreeHitsAndMeasureLoss("heavy_punch");
+
+        GD.Print($"[INFO] A13 反伤：轻拳被架住 -{lightLoss}，重拳被架住 -{heavyLoss}");
+        Check(heavyLoss > lightLoss,
+            $"重拳被读的代价没有更高（轻 {lightLoss} / 重 {heavyLoss}）—— 重招变成了无风险高收益");
+        Check(heavyLoss >= 40, $"重拳被读只掉 {heavyLoss}，惩罚不足以抵消一次重拳的收益（26）");
+    }
+
+    private async Task<int> RunThreeHitsAndMeasureLoss(string action)
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        player.invincible = false;
+        int hp0 = player.HP;
+
+        for (int i = 0; i < 3; i++)
+        {
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            Input.ActionPress(action);
+            await Frames(1);
+            Input.ActionRelease(action);
+            await Frames(39);
+        }
+        await Frames(6);
+
+        int loss = hp0 - player.HP;
+        fixture.QueueFree();
+        await Frames(1);
+        return loss;
     }
 
     /// <summary>
