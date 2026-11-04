@@ -53,12 +53,24 @@ public partial class Hitbox : Area2D
 		};
 	}
 
+	/// <summary>起手预演：半透明，只用来提前告诉玩家"会打到哪里"。</summary>
 	public void ShowThreat(Color color)
 	{
 		if (_threat != null)
 		{
 			RebuildThreatPolygon();
 			_threat.Modulate = color;
+			_threat.Visible = true;
+		}
+	}
+
+	/// <summary>判定生效：实心挥击块。形状和颜色由招式数据决定，轻重拳一眼可分辨。</summary>
+	public void ShowSwing(Color color)
+	{
+		if (_threat != null)
+		{
+			RebuildThreatPolygon();
+			_threat.Modulate = new Color(color.R, color.G, color.B, 0.95f);
 			_threat.Visible = true;
 		}
 	}
@@ -98,6 +110,10 @@ public partial class Hitbox : Area2D
 			HitSpark hitSpark = hitSparkScene.Instantiate() as HitSpark;
 			GetTree().CurrentScene.AddChild(hitSpark);
 			hitSpark.GlobalPosition = position;
+			if (_move != null)
+			{
+				hitSpark.Configure(_move.accentColor, _move.sparkAmount);
+			}
 			hitSpark.Play();
 		}
 	}

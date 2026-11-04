@@ -160,18 +160,28 @@ public partial class CombatHandler : Node, IInputReceiver
 
 	private void ApplySegmentVisual()
 	{
+		if (_move == null)
+		{
+			return;
+		}
+
+		Color accent = _move.accentColor;
+
 		switch (CurrentSegment())
 		{
 			case Segment.Startup:
+				// 身体用相位色（黄=起手），预演框用招式色（半透明）——两个通道各管一件事
 				SetVisual(new Color(1.0f, 0.85f, 0.0f));
-				_hitbox.ShowThreat(new Color(1.0f, 0.85f, 0.0f, 0.35f));
+				_hitbox.ShowThreat(new Color(accent.R, accent.G, accent.B, 0.3f));
 				break;
 			case Segment.Active:
+				// 身体仍然红（相位），但挥击块是实心招式色：轻拳细长冷色、重拳粗壮暖色
 				SetVisual(new Color(1.0f, 0.1f, 0.1f));
-				_hitbox.ShowThreat(new Color(1.0f, 0.1f, 0.1f, 0.6f));
+				_hitbox.ShowSwing(accent);
 				break;
 			case Segment.Recovery:
 				SetVisual(new Color(0.1f, 1.0f, 0.4f));
+				_hitbox.HideThreat();   // 后摇不该再显示攻击范围
 				break;
 		}
 	}

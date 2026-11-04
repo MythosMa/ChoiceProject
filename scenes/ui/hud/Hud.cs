@@ -11,8 +11,15 @@ public partial class Hud : CanvasLayer
     [Export]
     public ProgressBar dodgeBar;
 
+    [Export]
+    public ProgressBar enemyBar;
+
+    [Export]
+    public Label enemyLabel;
+
     private Player _player;
     private DodgeHandler _dodge;
+    private Enemy01 _enemy;
 
     public override void _Ready()
     {
@@ -42,6 +49,21 @@ public partial class Hud : CanvasLayer
             int max = Mathf.Max(1, _dodge.cooldownFrames);
             dodgeBar.MaxValue = max;
             dodgeBar.Value = Mathf.Clamp(max - _player.dodgeCooldown, 0, max);
+        }
+
+        if (_enemy == null || !IsInstanceValid(_enemy))
+        {
+            _enemy = GetTree().GetFirstNodeInGroup("Enemy") as Enemy01;
+        }
+        if (enemyBar != null && _enemy != null)
+        {
+            int maxHp = Mathf.Max(1, _enemy.MaxHP);
+            enemyBar.MaxValue = maxHp;
+            enemyBar.Value = Mathf.Clamp(_enemy.HP, 0, maxHp);
+            if (enemyLabel != null)
+            {
+                enemyLabel.Text = $"{_enemy.displayName}   {_enemy.HP} / {maxHp}";
+            }
         }
     }
 

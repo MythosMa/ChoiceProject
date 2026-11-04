@@ -45,6 +45,14 @@ public partial class MoveData : Resource
     [Export]
     public Vector2 hitboxSize = Vector2.Zero; // Hitbox 大小
 
+    [ExportGroup("表现")]
+    /// <summary>招式主色：挥击块 / 命中火花都用它。轻拳冷、重拳暖。</summary>
+    [Export]
+    public Color accentColor = new Color(1f, 0.9f, 0.4f);
+    /// <summary>命中火花粒子数（轻招少、重招多）。</summary>
+    [Export]
+    public int sparkAmount = 14;
+
     [ExportGroup("移动锁定")]
     [Export]
     public bool lockMovement = true; // 是否移动锁定

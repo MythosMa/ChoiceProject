@@ -10,6 +10,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     public Hitbox attackHitbox { get; private set; }
 
     [Export]
+    public string displayName = "敌人";
+
+    [Export]
     public int maxHP = 50;
 
     /// <summary>练习木桩模式：血量改用 trainingHP，方便反复练读招/骗招而不打死敌人。</summary>
@@ -33,6 +36,7 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     private bool _dead;
 
     public int HP => _hp;
+    public int MaxHP => _maxHp;
 
     public override void _Ready()
     {

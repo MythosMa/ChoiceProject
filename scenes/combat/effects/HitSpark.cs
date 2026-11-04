@@ -13,6 +13,17 @@ public partial class HitSpark : Node2D
         }
     }
 
+    /// <summary>按招式配置火花：颜色 + 粒子数（轻招小而密，重招大而散）。</summary>
+    public void Configure(Color color, int amount)
+    {
+        if (_p == null)
+        {
+            return;
+        }
+        _p.Color = color;
+        _p.Amount = Mathf.Max(4, amount);
+    }
+
     public void Play()
     {
         if (_p != null)

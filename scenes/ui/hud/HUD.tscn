@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3 uid="uid://dbd5hbgh524ca"]
+[gd_scene load_steps=9 format=3 uid="uid://dbd5hbgh524ca"]
 
 [ext_resource type="Script" uid="uid://cq5yhm5mw0lqy" path="res://scenes/ui/hud/Hud.cs" id="1_c3k0f"]
 
@@ -14,11 +14,19 @@ bg_color = Color(0.3, 0.68, 0.92, 1)
 [sub_resource type="StyleBoxFlat" id="bar_dodge"]
 bg_color = Color(0.92, 0.86, 0.45, 1)
 
-[node name="Hud" type="CanvasLayer" unique_id=404932252 node_paths=PackedStringArray("hpBar", "energyBar", "dodgeBar")]
+[sub_resource type="StyleBoxFlat" id="bar_enemy"]
+bg_color = Color(0.8, 0.2, 0.2, 1)
+
+[sub_resource type="SystemFont" id="SystemFont_cjk"]
+font_names = PackedStringArray("Heiti SC", "Hiragino Sans GB", "Songti SC", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC")
+
+[node name="Hud" type="CanvasLayer" unique_id=404932252 node_paths=PackedStringArray("hpBar", "energyBar", "dodgeBar", "enemyBar", "enemyLabel")]
 script = ExtResource("1_c3k0f")
 hpBar = NodePath("HPBar")
 energyBar = NodePath("EnergyBar")
 dodgeBar = NodePath("DodgeBar")
+enemyBar = NodePath("EnemyBar")
+enemyLabel = NodePath("EnemyLabel")
 
 [node name="Panel" type="ColorRect" parent="."]
 offset_left = 12.0
@@ -28,6 +36,7 @@ offset_bottom = 182.0
 color = Color(0, 0, 0, 0.55)
 
 [node name="HPLabel" type="Label" parent="."]
+theme_override_fonts/font = SubResource("SystemFont_cjk")
 offset_left = 20.0
 offset_top = 21.0
 offset_right = 60.0
@@ -44,6 +53,7 @@ theme_override_styles/fill = SubResource("bar_hp")
 show_percentage = false
 
 [node name="EnergyLabel" type="Label" parent="."]
+theme_override_fonts/font = SubResource("SystemFont_cjk")
 offset_left = 20.0
 offset_top = 49.0
 offset_right = 60.0
@@ -60,6 +70,7 @@ theme_override_styles/fill = SubResource("bar_energy")
 show_percentage = false
 
 [node name="DodgeLabel" type="Label" parent="."]
+theme_override_fonts/font = SubResource("SystemFont_cjk")
 offset_left = 20.0
 offset_top = 77.0
 offset_right = 60.0
@@ -76,9 +87,35 @@ theme_override_styles/fill = SubResource("bar_dodge")
 show_percentage = false
 
 [node name="Legend" type="Label" parent="."]
+theme_override_fonts/font = SubResource("SystemFont_cjk")
 offset_left = 20.0
 offset_top = 108.0
 offset_right = 380.0
 offset_bottom = 176.0
 theme_override_font_sizes/font_size = 15
 text = "Z  轻拳\nX  重拳\nShift  闪避"
+
+[node name="EnemyPanel" type="ColorRect" parent="."]
+offset_left = 660.0
+offset_top = 16.0
+offset_right = 1260.0
+offset_bottom = 80.0
+color = Color(0, 0, 0, 0.55)
+
+[node name="EnemyLabel" type="Label" parent="."]
+theme_override_fonts/font = SubResource("SystemFont_cjk")
+offset_left = 672.0
+offset_top = 20.0
+offset_right = 1248.0
+offset_bottom = 46.0
+text = "敌人   50 / 50"
+horizontal_alignment = 1
+
+[node name="EnemyBar" type="ProgressBar" parent="."]
+offset_left = 692.0
+offset_top = 52.0
+offset_right = 1228.0
+offset_bottom = 72.0
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("bar_enemy")
+show_percentage = false
