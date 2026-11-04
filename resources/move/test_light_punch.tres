@@ -4,7 +4,8 @@
 
 [resource]
 script = ExtResource("1_2xfqc")
-moveName = "test_light_punch"
+moveId = "test_light_punch"
+displayName = "轻拳"
 energyCost = 15
 startupFrames = 6
 damage = 6

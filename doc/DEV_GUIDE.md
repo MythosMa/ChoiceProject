@@ -255,7 +255,7 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
 - `IDamageable`（文件名有 typo：`IDamanageable.cs`）：`bool TakeDamage(int damageAmount)`——**返回 bool** 表示这次伤害是否真正生效（S2 从 `void` 改来，用于让无敌/免伤挡掉反馈，见下方 Hitbox）。
 
 **MoveData（`scripts/data/MoveData.cs`，`[GlobalClass]` Resource，玩家与敌人共用）**
-字段：`moveName`；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
+字段：**`moveId`（身份，AI 认招用它；2026-11-04 由 `moveName` 拆出）**、`displayName`（只给人看）；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
 
 **中断优先级（决策，GAME_DESIGN §6 未落档，此处固化）**
 > 受击(hitstun) > 闪避(dodge) > 顿帧门(hitstop gate) > 普通 Tick。**例外：闪避无敌期内被命中 → 命中无效**（在 `TakeDamage` 层挡，不触发受击）。
@@ -296,6 +296,9 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
   - **为什么不用代码 new：** 未来不同敌人需要**手编辑**的判定形状（尺寸/偏移各异），"编辑器预设 + 按实例独立"既保证可手编、又消除共享，优于运行时 `new RectangleShape2D()`。
   - 运行时代码只**读取/微调**预设形状（如按 MoveData 覆盖 size/offset），不负责创建。
   - **S2 建议（多敌人时）：** 敌人一多，逐个唯一化容易漏。**在 Hurtbox.tscn / Hitbox.tscn 的源 Shape 上勾一次 `本地到场景`**，之后所有实例自动独立、零心智负担；已唯一化的玩家实例保持不变即可，两者结果等价、可共存。
+
+- **回合归属（2026-11-04 立为全局铁律）：** 每次交互结算后必须能回答"这一回合归谁"；**任何让被惩罚方同时获益的分支都是 bug**。
+  完整自查清单与两次事故记录见 [`COMBAT_SPEC`](COMBAT_SPEC.md) §〇。新增状态机分支、"给奖励"的分支时先过那张表。
 
 - **战斗判定碰撞分层（S1 约定，2026-09-12）：** Hitbox/Hurtbox 都是 Area2D，靠 `area_entered` 互相检测。Godot 默认所有 Area 都在物理层 1 / 掩码 1——这会让**玩家自己的 Hitbox 检测到自己的 Hurtbox（出招即自伤）**，且敌我判定全混在一层、无法区分。故给战斗判定 Area 单独分层（在 **项目设置 → 层名称 → 2D 物理** 命名）：
 

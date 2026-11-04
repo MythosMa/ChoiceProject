@@ -83,7 +83,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		_hitbox.Configure(move, facing);
 
 
-		DebugLog.V($"连段第 {_chainHits} 击: {move.moveName}");
+		DebugLog.V($"连段第 {_chainHits} 击: {move.displayName}");
 		ApplySegmentVisual();
 		SyncHitbox();
 
@@ -130,7 +130,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		if (_prevSegment == Segment.Active && seg == Segment.Recovery && !_hitbox.hasConnected && !_move.dodgeCancellable)
 		{
 			player.WhiffPunishable = true;
-			DebugLog.V($"[挥空] {_move.moveName}挥空，露出破绽~");
+			DebugLog.V($"[挥空] {_move.displayName}挥空，露出破绽~");
 		}
 		_prevSegment = seg;
 

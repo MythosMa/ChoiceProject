@@ -18,7 +18,6 @@ using System.Threading.Tasks;
 public partial class TestRunner : Node
 {
     private const string FixturePath = "res://tests/fixtures/combat_fixture.tscn";
-    private const string JabPath = "res://resources/move/test_light_punch.tres";
 
     private int _passed;
     private int _failed;
@@ -34,6 +33,7 @@ public partial class TestRunner : Node
         await RunSafe("A4 闪避可以穿过敌人身体", TestDodgePassThrough);
         await RunSafe("A5 被识破的第 3 次同招不造成伤害", TestReadNullifiesThirdHit);
         await RunSafe("A6 架住之后敌人不再挥空踉跄", TestNoStaggerAfterArmorPunish);
+        await RunSafe("A7 招式身份可配置且唯一（AI 读招不依赖代码硬编码）", TestMoveIdentity);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -75,6 +75,13 @@ public partial class TestRunner : Node
         AddChild(fixture);
         await Frames(2);
         return fixture;
+    }
+
+    /// <summary>从玩家身上取招式资源，避免测试硬编码资源路径（改文件名不会让测试失效）。</summary>
+    private static MoveData LightMoveOf(Player player)
+    {
+        CombatHandler combat = player.GetNode<InputStateMachine>("InputStateMachine").combatHandler;
+        return combat?.lightMove;
     }
 
     private static void Check(bool condition, string message)
@@ -152,9 +159,10 @@ public partial class TestRunner : Node
         await Frames(2);
 
         int enemyHpBefore = enemy.HP;
-        MoveData jab = GD.Load<MoveData>(JabPath);
-        Check(jab != null, $"找不到招式资源：{JabPath}");
-        playerHit.Configure(jab, 1);
+        // 不写死资源路径：直接问玩家"你的轻拳是哪个资源"
+        MoveData light = LightMoveOf(player);
+        Check(light != null, "玩家没有配置 lightMove");
+        playerHit.Configure(light, 1);
         playerHit.SetActive(true);
         await Frames(4);
         playerHit.SetActive(false);
@@ -177,6 +185,35 @@ public partial class TestRunner : Node
         player.invincible = true;
         fixture.QueueFree();
         await Frames(1);
+    }
+
+    /// <summary>
+    /// A7：招式身份必须来自资源里的 moveId，且互不重复。
+    /// 这条防的是"AI 读招依赖代码硬编码 / 两个招式共用同一身份"。
+    /// </summary>
+    private Task TestMoveIdentity()
+    {
+        PackedScene packed = GD.Load<PackedScene>(FixturePath);
+        Node2D fixture = packed.Instantiate<Node2D>();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+
+        CombatHandler combat = player.GetNode<InputStateMachine>("InputStateMachine").combatHandler;
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData[] moves = { combat.lightMove, combat.heavyMove, esm.attackMove, esm.punishMove };
+        var seen = new System.Collections.Generic.HashSet<string>();
+
+        foreach (MoveData m in moves)
+        {
+            Check(m != null, "有招式槽位是空的");
+            Check(!string.IsNullOrEmpty(m.moveId) && m.moveId != "unnamed",
+                $"招式「{m.displayName}」没有配置 moveId");
+            Check(seen.Add(m.Id), $"moveId 重复：{m.Id}（AI 会把它们当成同一招）");
+        }
+
+        fixture.QueueFree();
+        return Task.CompletedTask;
     }
 
     /// <summary>

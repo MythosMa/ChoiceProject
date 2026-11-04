@@ -60,7 +60,7 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         {
             return false;
         }
-        string moveId = move?.moveName ?? "Unknown";
+        string moveId = move != null ? move.Id : "Unknown";
         if (enemyStateMachine.IsArmoredAgainst(moveId))
         {
             PunishRead(moveId);

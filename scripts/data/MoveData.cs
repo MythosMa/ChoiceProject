@@ -4,8 +4,18 @@ using System;
 [GlobalClass]
 public partial class MoveData : Resource
 {
+    [ExportGroup("标识")]
+    /// <summary>稳定标识：AI 读招、招式匹配、存档等一切"认招"的地方都用它。
+    /// 改它等于换一个招式身份；换资源文件而不改它，逻辑不受影响。</summary>
     [Export]
-    public string moveName = "default_data";
+    public string moveId = "unnamed";
+
+    /// <summary>显示名：只给人看（日志 / HUD）。随便改，不影响任何逻辑。</summary>
+    [Export]
+    public string displayName = "未命名";
+
+    /// <summary>取标识的统一入口：没配就回落到 "unnamed"，避免 null 传播。</summary>
+    public string Id => string.IsNullOrEmpty(moveId) ? "unnamed" : moveId;
 
     [ExportGroup("资源消耗")]
     [Export]
