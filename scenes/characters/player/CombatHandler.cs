@@ -4,20 +4,13 @@ public partial class CombatHandler : Node, IInputReceiver
 {
 	private enum Segment { Startup, Active, Recovery }
 
+	/// <summary>轻攻击（Z / A）。</summary>
 	[Export]
-	public MoveData openerMove;
+	public MoveData lightMove;
 
+	/// <summary>重攻击（X / S）。2026-11-04 起由按键决定，不再由方向决定。</summary>
 	[Export]
-	public MoveData moveUp;
-
-	[Export]
-	public MoveData moveDown;
-
-	[Export]
-	public MoveData moveLeft;
-
-	[Export]
-	public MoveData moveRight;
+	public MoveData heavyMove;
 
 	[Export] public int chainCap = 3;     // 占位最大链长
 
@@ -46,8 +39,10 @@ public partial class CombatHandler : Node, IInputReceiver
 	public void Enter()
 	{
 		_chainHits = 1;
-		Direction dir = Tools.GetDirection(InputManager.Instance.Current);
-		if (!StartMove(SelectMove(dir), ResolveAttackFacing(dir)))
+		InputManager input = InputManager.Instance;
+		AttackType pressed = Tools.GetAttack(Tools.GetPressed(input.Previous, input.Current));
+		Direction dir = Tools.GetDirection(input.Current);
+		if (!StartMove(SelectMove(pressed), ResolveAttackFacing(dir)))
 		{
 			_move = null;
 		}
@@ -186,18 +181,16 @@ public partial class CombatHandler : Node, IInputReceiver
 		player.GetNode<Sprite2D>("Sprite2D").Modulate = color;
 	}
 
-	private MoveData SelectMove(Direction dir)
+	/// <summary>
+	/// 选招：由**按下的攻击键**决定，不再由方向决定（2026-11-04）。
+	/// Z / A = 轻攻击；X / S = 重攻击。同时按下轻重时重攻击优先。
+	/// 方向只负责"朝哪打"（ResolveAttackFacing），不负责"用哪招"。
+	/// </summary>
+	private MoveData SelectMove(AttackType attack)
 	{
-		MoveData m = dir switch
-		{
-			Direction.Up => moveUp,
-			Direction.Down => moveDown,
-			Direction.Left => moveLeft,
-			Direction.Right => moveRight,
-			_ => openerMove,
-		};
-
-		return m ?? openerMove;
+		bool heavy = (attack & (AttackType.HP | AttackType.HK)) != 0;
+		MoveData m = heavy ? heavyMove : lightMove;
+		return m ?? lightMove;
 	}
 
 	private MoveData ResolveNext(out Direction dir)
@@ -219,7 +212,7 @@ public partial class CombatHandler : Node, IInputReceiver
 			if ((prev & rec.Attack) != rec.Attack)
 			{
 				dir = rec.Direction;
-				return SelectMove(dir);
+				return SelectMove(rec.Attack);
 			}
 		}
 		return null;

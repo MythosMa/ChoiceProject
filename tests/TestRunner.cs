@@ -31,6 +31,7 @@ public partial class TestRunner : Node
         await RunSafe("A1 攻击框不会指向自己 / 且能指向对手", TestNoSelfHit);
         await RunSafe("A2 双向命中：玩家能打伤敌人、敌人能打伤玩家", TestBidirectionalHit);
         await RunSafe("A3 基线：交替 jab/heavy 能击杀 50HP 敌人", TestBaseline);
+        await RunSafe("A4 闪避可以穿过敌人身体", TestDodgePassThrough);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -177,6 +178,41 @@ public partial class TestRunner : Node
     }
 
     /// <summary>
+    /// A4：闪避必须能穿过敌人身体（2026-11-04 追加）。
+    /// 做法：把敌人身体放在独立物理层，闪避期间临时把自己的 mask 去掉该层。
+    /// </summary>
+    private async Task TestDodgePassThrough()
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        uint maskBefore = player.CollisionMask;
+        float enemyX = enemy.GlobalPosition.X;
+
+        player.GlobalPosition = new Vector2(enemyX - 40, enemy.GlobalPosition.Y);
+        await Frames(2);
+
+        // 先朝右
+        Input.ActionPress("right");
+        await Frames(3);
+        Input.ActionRelease("right");
+        await Frames(2);
+        Check(player.facing == 1, $"朝向没转过去（facing={player.facing}）");
+
+        // 闪避
+        Input.ActionPress("dodge");
+        await Frames(2);
+        Input.ActionRelease("dodge");
+        await Frames(22);
+
+        Check(player.GlobalPosition.X > enemyX,
+            $"闪避没能穿过敌人：玩家 X={player.GlobalPosition.X:F1}，敌人 X={enemyX:F1}");
+        Check(player.CollisionMask == maskBefore,
+            $"闪避结束后碰撞掩码没还原：{player.CollisionMask} != {maskBefore}");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>
     /// A3：基线，不是调参断言。
     ///
     /// 为什么不用"同名 jab 连打"做基线：**它打不死**——第 3 下之后敌人识破 jab，
@@ -208,21 +244,12 @@ public partial class TestRunner : Node
                 bool heavy = (frames / 20) % 2 == 1;
                 _wasHeavy = heavy;
                 player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
-                if (heavy)
-                {
-                    Input.ActionPress("right");
-                }
-                Input.ActionPress("light_punch");
+                Input.ActionPress(heavy ? "heavy_punch" : "light_punch");
                 pressed = true;
             }
             else if (pressed)
             {
-                Input.ActionRelease("light_punch");
-                if (_wasHeavy)
-                {
-                    Input.ActionRelease("right");
-                    _wasHeavy = false;
-                }
+                Input.ActionRelease(_wasHeavy ? "heavy_punch" : "light_punch");
                 pressed = false;
             }
 
@@ -231,7 +258,7 @@ public partial class TestRunner : Node
         }
 
         Input.ActionRelease("light_punch");
-        Input.ActionRelease("right");
+        Input.ActionRelease("heavy_punch");
         bool killed = enemy.HP <= 0;
 
         fixture.QueueFree();
