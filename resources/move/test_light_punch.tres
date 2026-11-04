@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_2xfqc")
-moveName = "jab"
+moveName = "test_light_punch"
 energyCost = 15
 startupFrames = 6
 damage = 6

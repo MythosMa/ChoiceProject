@@ -24,7 +24,7 @@ dodgeBar = NodePath("DodgeBar")
 offset_left = 12.0
 offset_top = 12.0
 offset_right = 384.0
-offset_bottom = 106.0
+offset_bottom = 182.0
 color = Color(0, 0, 0, 0.55)
 
 [node name="HPLabel" type="Label" parent="."]
@@ -74,3 +74,11 @@ offset_bottom = 98.0
 theme_override_styles/background = SubResource("bar_bg")
 theme_override_styles/fill = SubResource("bar_dodge")
 show_percentage = false
+
+[node name="Legend" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 108.0
+offset_right = 380.0
+offset_bottom = 176.0
+theme_override_font_sizes/font_size = 15
+text = "Z  轻拳\nX  重拳\nShift  闪避"

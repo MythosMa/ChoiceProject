@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 public partial class TestRunner : Node
 {
     private const string FixturePath = "res://tests/fixtures/combat_fixture.tscn";
-    private const string JabPath = "res://resources/move/test_light.tres";
+    private const string JabPath = "res://resources/move/test_light_punch.tres";
 
     private int _passed;
     private int _failed;

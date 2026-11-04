@@ -17,8 +17,8 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-InputManager="*uid://c8gow7sv2ffmf"
-FeedbackSystem="*uid://b2numnufiy2bf"
+InputManager="*res://core/InputManager.cs"
+FeedbackSystem="*res://core/FeedbackSystem.cs"
 
 [display]
 

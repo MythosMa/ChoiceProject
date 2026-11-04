@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_buxne")
-moveName = "heavy"
+moveName = "test_heavy_punch"
 energyCost = 30
 startupFrames = 12
 activeFrames = 5

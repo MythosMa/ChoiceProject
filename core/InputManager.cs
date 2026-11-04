@@ -38,8 +38,10 @@ public partial class InputManager : Node
 		("right", InputButtons.Right),
 		("light_punch", InputButtons.LP),
 		("heavy_punch", InputButtons.HP),
-		("light_kick", InputButtons.LK),
-		("heavy_kick", InputButtons.HK),
+		// 拳/脚区分暂缓（2026-11-04）：脚键（A / S）暂时失效，不再采样。
+		// Input Map 里的动作保留着，将来启用拳脚区分时把下面两行加回来即可。
+		// ("light_kick", InputButtons.LK),
+		// ("heavy_kick", InputButtons.HK),
 		("jump", InputButtons.Jump),
 		("dodge", InputButtons.Dodge),
 		("block", InputButtons.Block),
