@@ -14,3 +14,7 @@
 
 # 临时截图（doc/images/ 下的基线图是刻意保留的）
 /shot.png
+
+# godot-bridge 插件自动注入的开发期 autoload（不进游戏仓库）
+/autoload/mcp_interaction_server.gd
+/autoload/mcp_interaction_server.gd.uid

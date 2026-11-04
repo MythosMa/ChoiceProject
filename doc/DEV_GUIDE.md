@@ -56,7 +56,8 @@ choice_project/
 │   ├── ui/
 │   │   ├── hud/                              # HP / 气
 │   │   └── input_test/                       # 输入历史面板
-│   └── test_scenes/                          # 测试场景（当前 main scene 在此）
+│   ├── arena/                                # 试玩场景（当前 main scene）
+│   └── test_scenes/                          # 调试沙盒（不进正式流程）
 │
 ├── scripts/                          # 纯逻辑/数据，不依赖场景节点
 │   ├── data/                         # InputButtons/Direction/AttackType/InputRecord/MoveData

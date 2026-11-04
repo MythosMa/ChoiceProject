@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/characters/player/Player.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://scenes/characters/enemy/enemy01/Enemy01.tscn" id="2_enemy"]
+
+[sub_resource type="RectangleShape2D" id="floor_shape"]
+size = Vector2(2000, 40)
+
+[node name="CombatFixture" type="Node2D"]
+
+[node name="Floor" type="StaticBody2D" parent="."]
+position = Vector2(0, 100)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor"]
+shape = SubResource("floor_shape")
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector2(-100, 64)
+
+[node name="Enemy01" parent="." instance=ExtResource("2_enemy")]
+position = Vector2(100, 64)
