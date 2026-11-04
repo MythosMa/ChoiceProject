@@ -37,6 +37,7 @@ public partial class TestRunner : Node
         await RunSafe("A8 交替两招连打会触发解围（免费解消失）", TestBurstOnAlternating);
         await RunSafe("A9 打两下就收手不触发解围", TestNoBurstWhenBackingOff);
         await RunSafe("A10 一次压力周期只触发一次解围", TestSingleBurstPerCycle);
+        await RunSafe("A12 识破后的反击能打到重拳最远射程", TestReadCounterReachesHeavyRange);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -229,6 +230,50 @@ public partial class TestRunner : Node
         fixture.QueueFree();
         await Frames(1);
         return bursts;
+    }
+
+    /// <summary>
+    /// A12：站在重拳最远射程上连打两下重拳，识破后的反击必须能打到玩家。
+    /// 这条防的是"被识破反而安全"——反击够不到 → 打空 → 踉跄 → 玩家白拿 ×3。
+    /// 敌人 AI 必须运行，反击才会真正打出来。
+    /// </summary>
+    private async Task TestReadCounterReachesHeavyRange()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+
+        // 站在重拳最远射程附近（重拳能打到 150 左右，敌人普攻只能到 110）
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X + 150, enemy.GlobalPosition.Y);
+        await Frames(2);
+
+        Input.ActionPress("left");
+        await Frames(4);
+        Input.ActionRelease("left");
+        await Frames(4);
+        Check(player.facing == -1, $"朝向没转过去（facing={player.facing}）");
+
+        int playerHp0 = player.HP;
+        int enemyHp0 = enemy.HP;
+
+        for (int i = 0; i < 2; i++)
+        {
+            Input.ActionPress("heavy_punch");
+            await Frames(1);
+            Input.ActionRelease("heavy_punch");
+            await Frames(40);
+        }
+
+        Check(enemy.HP < enemyHp0, $"重拳在 150 距离没打到敌人（{enemyHp0} → {enemy.HP}）");
+
+        await Frames(80);
+
+        Check(player.HP < playerHp0,
+            $"识破后的反击没打到站在重拳射程上的玩家（HP {playerHp0} → {player.HP}）—— 被识破反而安全，读招变成送分");
+
+        Input.ActionRelease("heavy_punch");
+        fixture.QueueFree();
+        await Frames(1);
     }
 
     /// <summary>A8：交替两招连打必须触发解围——这是"免费解消失"的核心断言。</summary>

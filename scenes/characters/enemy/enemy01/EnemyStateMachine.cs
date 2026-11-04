@@ -23,6 +23,10 @@ public partial class EnemyStateMachine : Node
     [Export]
     public MoveData burstMove;
 
+    /// <summary>识破后的反击招：长距离 + 14 帧前摇（给玩家反应窗口）。</summary>
+    [Export]
+    public MoveData counterMove;
+
     /// <summary>压力每掉 1 格需要的秒数。</summary>
     [Export]
     public float pressureDecaySeconds = 1.0f;
@@ -204,6 +208,9 @@ public partial class EnemyStateMachine : Node
         {
             _predictedMoveId = _lastMoveId;
             _repeatCount = 0;
+            // 关键：识破后的反击必须用**长距离反斩**，否则玩家站在重拳射程外，
+            // 这一刀必然打空 → 踉跄 → "被识破"反而变成送 ×3（实测发生过）。
+            _nextAttack = counterMove != null ? counterMove : punishMove;
             string display = _lastMove != null ? _lastMove.displayName : _predictedMoveId;
             GD.Print($"[识破] 敌人预判了你的 {display}（{_predictedMoveId}）—— 再打同一招会被架住并反击");
             EnterPhase(Phase.Startup);
