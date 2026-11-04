@@ -1,6 +1,4 @@
 using Godot;
-using System;
-using System.Net.Sockets;
 
 public partial class CombatHandler : Node, IInputReceiver
 {
@@ -49,22 +47,10 @@ public partial class CombatHandler : Node, IInputReceiver
 	{
 		_chainHits = 1;
 		Direction dir = Tools.GetDirection(InputManager.Instance.Current);
-		if (!StartMove(SelectMove(dir)))
+		if (!StartMove(SelectMove(dir), ResolveAttackFacing(dir)))
 		{
 			_move = null;
 		}
-		// StartMove(SelectMove(dir));
-
-		// InputManager input = InputManager.Instance;
-		// InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
-		// if ((pressed & InputButtons.DirectionMask) != InputButtons.None)
-		// {
-		// 	Direction dir = Tools.GetDirection(input.Current);
-		// 	if (dir != Direction.Neutral)
-		// 	{
-		// 		GD.Print($"首击路线：{Tools.GetDirectionArrow(dir)}");
-		// 	}
-		// }
 	}
 
 	public void Exit()
@@ -82,7 +68,7 @@ public partial class CombatHandler : Node, IInputReceiver
 	}
 
 
-	private bool StartMove(MoveData move)
+	private bool StartMove(MoveData move, int facing)
 	{
 		if (move == null)
 		{
@@ -99,7 +85,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		_frameInMove = 0;
 		_prevSegment = Segment.Startup;
 		player.WhiffPunishable = false;
-		_hitbox.Configure(move, player.facing);
+		_hitbox.Configure(move, facing);
 
 
 		GD.Print($"连段第 {_chainHits} 击: {move.moveName}");
@@ -133,11 +119,11 @@ public partial class CombatHandler : Node, IInputReceiver
 		{
 			_hitbox.SetActive(false);
 			player.WhiffPunishable = false;
-			MoveData next = ResolveNext();
+			MoveData next = ResolveNext(out Direction nextDir);
 			if (next != null && _chainHits < chainCap)
 			{
 				_chainHits++;
-				StartMove(next);
+				StartMove(next, ResolveAttackFacing(nextDir));
 			}
 			else
 			{
@@ -214,8 +200,9 @@ public partial class CombatHandler : Node, IInputReceiver
 		return m ?? openerMove;
 	}
 
-	private MoveData ResolveNext()
+	private MoveData ResolveNext(out Direction dir)
 	{
+		dir = Direction.Neutral;
 		var buffer = InputManager.Instance.Buffer;
 		for (int i = buffer.Count - 1; i >= 0; i--)
 		{
@@ -231,10 +218,28 @@ public partial class CombatHandler : Node, IInputReceiver
 			var prev = i > 0 ? buffer[i - 1].Attack : AttackType.None;
 			if ((prev & rec.Attack) != rec.Attack)
 			{
-				return SelectMove(rec.Direction);
+				dir = rec.Direction;
+				return SelectMove(dir);
 			}
 		}
 		return null;
+	}
+
+	/// <summary>
+	/// 出招朝向：以"出招瞬间按下的水平方向"为准（绝对方向语义），
+	/// 只有在没有水平方向时才沿用移动朝向。
+	/// 修复：面向左时按 →+攻击，选到的是 heavy，但判定框按旧 facing 镜像到背后（挥空）。
+	/// </summary>
+	private int ResolveAttackFacing(Direction dir)
+	{
+		int facing = dir switch
+		{
+			Direction.Left or Direction.UpLeft or Direction.DownLeft => -1,
+			Direction.Right or Direction.UpRight or Direction.DownRight => 1,
+			_ => player.facing,
+		};
+		player.facing = facing;
+		return facing;
 	}
 
 }

@@ -12,6 +12,13 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     [Export]
     public int maxHP = 50;
 
+    /// <summary>练习木桩模式：血量改用 trainingHP，方便反复练读招/骗招而不打死敌人。</summary>
+    [Export]
+    public bool trainingMode = false;
+
+    [Export]
+    public int trainingHP = 5000;
+
     [Export]
     public float counterHitMultiplier = 2.0f;
 
@@ -22,11 +29,15 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
     public float staggerMultiplier = 3.0f;
 
     private int _hp;
+    private int _maxHp;
     private bool _dead;
+
+    public int HP => _hp;
 
     public override void _Ready()
     {
-        _hp = maxHP;
+        _maxHp = trainingMode ? trainingHP : maxHP;
+        _hp = _maxHp;
         enemyStateMachine.Initialize(this);
     }
 
@@ -55,15 +66,6 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
             PunishRead(moveId);
             return false;
         }
-        // bool isCurrentHit = enemyStateMachine.CurrentPhase == EnemyStateMachine.Phase.Recovery;
-        // int finalDamage = isCurrentHit ? Mathf.RoundToInt(damageAmount * counterHitMultiplier) : damageAmount;
-
-        // _hp = Mathf.Max(0, _hp - finalDamage);
-        // enemyStateMachine.RegisterHit(moveId);
-        // enemyStateMachine.Interrupt();
-
-        // GD.Print(isCurrentHit ? $"确反！ 敌人 -{finalDamage}, HP: {_hp}/{maxHP}" : $"敌人 -{finalDamage}, HP: {_hp}/{maxHP}");
-
         EnemyStateMachine.Phase phase = enemyStateMachine.CurrentPhase;
 
         int finalDamage = 0;
@@ -88,7 +90,7 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         _hp = Mathf.Max(0, _hp - finalDamage);
         enemyStateMachine.RegisterHit(moveId);
         enemyStateMachine.Interrupt();
-        GD.Print($"{tag}，敌人 -{finalDamage}, HP: {_hp}/{maxHP}");
+        GD.Print($"{tag}，敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");
 
         if (_hp <= 0)
         {

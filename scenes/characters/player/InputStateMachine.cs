@@ -98,7 +98,7 @@ public partial class InputStateMachine : Node
 		currentInputReceiver?.Exit();
 		currentInputReceiver = next;
 		currentInputReceiver.Enter();
-		GD.Print($"Transitioned to {next.GetType().Name}");
+		DebugLog.V($"Transitioned to {next.GetType().Name}");
 	}
 
 }

@@ -106,7 +106,7 @@ public partial class Player : CharacterBody2D, IDamageable
 	{
 		if (invincible)
 		{
-			GD.Print($"无敌状态，无法受到伤害 {damageAmount}");
+			DebugLog.V($"无敌状态，无法受到伤害 {damageAmount}");
 			return false;
 		}
 		_hp = Mathf.Max(0, _hp - damageAmount);

@@ -138,7 +138,7 @@ public partial class EnemyStateMachine : Node
         bool armoredPhase = _phase == Phase.Startup
             || _phase == Phase.Active
             || _phase == Phase.Recovery;
-        GD.Print($"[霸体检查] 来招={moveId} 预判={_predictedMoveId ?? "无"} 阶段={_phase} 匹配={match} 霸体段={armoredPhase}");
+        DebugLog.V($"[霸体检查] 来招={moveId} 预判={_predictedMoveId ?? "无"} 阶段={_phase} 匹配={match} 霸体段={armoredPhase}");
         return match && armoredPhase;
     }
 

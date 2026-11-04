@@ -75,7 +75,6 @@ shape = SubResource("RectangleShape2D_0tqcn")
 
 [node name="Enemy01" parent="." unique_id=321169640 instance=ExtResource("2_8xwxj")]
 position = Vector2(596, 664)
-maxHP = 5000
 
 [node name="TrainingDummy" parent="." unique_id=1294550708 instance=ExtResource("3_gyv1t")]
 position = Vector2(880, 668)
