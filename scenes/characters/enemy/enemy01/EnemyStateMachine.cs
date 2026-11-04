@@ -184,6 +184,27 @@ public partial class EnemyStateMachine : Node
         EnterPhase(Phase.Hitstun);
     }
 
+    /// <summary>
+    /// 霸体反打命中后的收尾（2026-11-04）。
+    ///
+    /// 一次"架住"就是这一回合的结算，敌人不再继续挥这一刀。否则会出现**因果倒挂**：
+    /// 玩家被架住（-18）→ 敌人这刀打空 → 敌人踉跄 → 玩家白拿 ×3。
+    ///
+    /// 后摇里的"架住"只清预判标记（后摇是它应得的破绽，不打断）；
+    /// 前摇/判定里的"架住"直接收招回 Idle —— 玩家此时仍在硬直，回合归敌人。
+    /// </summary>
+    public void OnArmorPunishResolved()
+    {
+        _predictedMoveId = null;
+        _nextAttack = null;
+        _enemy.attackHitbox.SetActive(false);
+
+        if (_phase == Phase.Startup || _phase == Phase.Active)
+        {
+            EnterPhase(Phase.Idle);
+        }
+    }
+
     private bool TryStartWhiffPunish()
     {
         if (punishMove == null)

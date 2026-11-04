@@ -119,5 +119,6 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         FeedbackSystem.Instance.RequestHitstop(counter.hitstopFrames);
         FeedbackSystem.Instance.RequestShake(counter.hitstopFrames, counter.shakeMagnitude);
         player.TakeDamage(punishDamage, counter);
+        enemyStateMachine.OnArmorPunishResolved();
     }
 }

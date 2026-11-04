@@ -33,6 +33,7 @@ public partial class TestRunner : Node
         await RunSafe("A3 基线：交替 jab/heavy 能击杀 50HP 敌人", TestBaseline);
         await RunSafe("A4 闪避可以穿过敌人身体", TestDodgePassThrough);
         await RunSafe("A5 被识破的第 3 次同招不造成伤害", TestReadNullifiesThirdHit);
+        await RunSafe("A6 架住之后敌人不再挥空踉跄", TestNoStaggerAfterArmorPunish);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -174,6 +175,49 @@ public partial class TestRunner : Node
             $"敌人攻击没有生效（玩家 HP {playerHpBefore} → {player.HP}）");
 
         player.invincible = true;
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>
+    /// A6：霸体反打命中后，敌人不能再继续挥这一刀（否则玩家被罚一次还能白拿 ×3）。
+    /// 敌人 AI 冻结，手动 Tick 相位机，把玩家拉开 400px 排除"打中/打空"的干扰。
+    /// </summary>
+    private async Task TestNoStaggerAfterArmorPunish()
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+        player.invincible = false; // 要真的吃到那 18 点，才会走"架住"分支
+
+        for (int i = 0; i < 3; i++)
+        {
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+            await Frames(21);
+        }
+
+        Check(enemy.HP == enemy.maxHP - 12, $"第 3 下没有被架住（敌人 HP={enemy.HP}）");
+
+        player.invincible = true;
+        int hpBefore = enemy.HP;
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X + 400, enemy.GlobalPosition.Y);
+
+        bool sawStagger = false;
+        for (int i = 0; i < 90; i++)
+        {
+            esm.Tick(1.0 / 60.0);
+            if (esm.CurrentPhase == EnemyStateMachine.Phase.Stagger)
+            {
+                sawStagger = true;
+            }
+            await Frames(1);
+        }
+
+        Check(!sawStagger, "架住之后敌人仍进入踉跄（因果倒挂：被罚的玩家反而白拿 ×3）");
+        Check(enemy.HP == hpBefore, $"架住之后敌人又掉血：{hpBefore} → {enemy.HP}");
+
         fixture.QueueFree();
         await Frames(1);
     }
