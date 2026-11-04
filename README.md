@@ -46,6 +46,7 @@ godot --path .                    # 或用 Godot 编辑器打开项目后 F5
 |------|------|
 | [ROADMAP](doc/ROADMAP.md) | **现在在哪、下一步做什么、怎么算做完**（排期与验收门的唯一依据） |
 | [GAME_DESIGN](doc/GAME_DESIGN.md) | 产品与玩法设计。**先读 §0 一页读懂**；§2.5 是短促交锋的完整推理，其余是展开 |
+| [COMBAT_SPEC](doc/COMBAT_SPEC.md) | **战斗规格书**：角色完整动作表、操作、手感参数、敌人数值、分阶段落地 |
 | [DEV_GUIDE](doc/DEV_GUIDE.md) | 技术：架构、模块边界、引擎坑、实现约定、变更日志 |
 | [BACKLOG](doc/BACKLOG.md) | 待办池：想到的、暂缓的、待拍板的 |
 | [doc/archive](doc/archive/) | 历史决策存档（**不再是现行依据**） |
