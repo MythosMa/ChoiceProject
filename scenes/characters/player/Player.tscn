@@ -24,6 +24,7 @@ inputStateMachine = NodePath("InputStateMachine")
 player = NodePath("..")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1764261496]
+position = Vector2(0, -150)
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
 
