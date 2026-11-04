@@ -88,9 +88,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         }
 
         _hp = Mathf.Max(0, _hp - finalDamage);
+        GD.Print($"{tag}，敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");   // 先报伤害，再报识破（因果顺序）
         enemyStateMachine.RegisterHit(moveId);
         enemyStateMachine.Interrupt();
-        GD.Print($"{tag}，敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");
 
         if (_hp <= 0)
         {
@@ -114,10 +114,10 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         MoveData counter = enemyStateMachine.attackMove;
         int punishDamage = Mathf.RoundToInt(counter.damage * armorPunishMultiplier);
 
+        GD.Print($"[架住] 你的 {moveId} 已被识破，伤害无效，遭到 {punishDamage} 点反击");
+
         FeedbackSystem.Instance.RequestHitstop(counter.hitstopFrames);
         FeedbackSystem.Instance.RequestShake(counter.hitstopFrames, counter.shakeMagnitude);
         player.TakeDamage(punishDamage, counter);
-
-        GD.Print($"霸体！你的{moveId}被招架了，遭到{punishDamage}点反击伤害");
     }
 }

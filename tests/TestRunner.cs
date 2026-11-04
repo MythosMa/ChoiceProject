@@ -32,6 +32,7 @@ public partial class TestRunner : Node
         await RunSafe("A2 双向命中：玩家能打伤敌人、敌人能打伤玩家", TestBidirectionalHit);
         await RunSafe("A3 基线：交替 jab/heavy 能击杀 50HP 敌人", TestBaseline);
         await RunSafe("A4 闪避可以穿过敌人身体", TestDodgePassThrough);
+        await RunSafe("A5 被识破的第 3 次同招不造成伤害", TestReadNullifiesThirdHit);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -173,6 +174,37 @@ public partial class TestRunner : Node
             $"敌人攻击没有生效（玩家 HP {playerHpBefore} → {player.HP}）");
 
         player.invincible = true;
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>
+    /// A5：识破语义——允许 2 次同名命中，**第 3 次同招被架住，伤害无效**（2026-11-04）。
+    /// 这条是针对"被识破了却还造成伤害"的回归断言。
+    /// </summary>
+    private async Task TestReadNullifiesThirdHit()
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        player.invincible = false; // 要验证被架住时玩家会吃到反击
+
+        int enemyHp0 = enemy.HP;
+        int playerHp0 = player.HP;
+
+        for (int i = 0; i < 3; i++)
+        {
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+            await Frames(21);
+        }
+        await Frames(6);
+
+        Check(enemyHp0 - enemy.HP == 12,
+            $"第 3 次同招不该造成伤害：敌人 {enemyHp0} → {enemy.HP}（期望只掉 12）");
+        Check(player.HP < playerHp0,
+            $"被架住后玩家没有吃到反击伤害（玩家 {playerHp0} → {player.HP}）");
+
         fixture.QueueFree();
         await Frames(1);
     }

@@ -22,8 +22,13 @@ public partial class EnemyStateMachine : Node
     [Export]
     public float punishRange = 140.0f;
 
+    /// <summary>
+    /// 允许的"同名命中"次数。达到后敌人武装识破：
+    /// 下一次**同一招**会被架住并反击（换招则不受影响）。
+    /// 语义是"允许次数"，所以 2 = 第 3 次同招被架住（2026-11-04 由 3 改为 2）。
+    /// </summary>
     [Export]
-    public int greedThreshold = 3; // 预研ai,当同一招式命中后，预判反制
+    public int greedThreshold = 2;
 
     [Export]
     public int greedWindowFrames = 120; // 预研ai, 未被同一招打中持续时长后，放弃预判
@@ -172,7 +177,7 @@ public partial class EnemyStateMachine : Node
         {
             _predictedMoveId = _lastMoveId;
             _repeatCount = 0;
-            GD.Print($"你的意图被识破了 {_predictedMoveId}被预判");
+            GD.Print($"[识破] 敌人预判了你的 {_predictedMoveId} —— 再打同一招会被架住并反击");
             EnterPhase(Phase.Startup);
             return;
         }
