@@ -25,10 +25,12 @@ public partial class DodgeHandler : Node, IInputReceiver
         _frame = 0;
         player.invincible = true;
         player.dodgeCooldown = cooldownFrames;
+        player.GetNode<Sprite2D>("Sprite2D").Modulate = new Color(0.2f, 0.5f, 1.0f);
     }
     public void Exit()
     {
         player.invincible = false;
+        player.GetNode<Sprite2D>("Sprite2D").Modulate = Colors.White;
     }
     public void Tick(double delta)
     {

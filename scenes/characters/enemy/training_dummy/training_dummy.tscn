@@ -4,15 +4,22 @@
 [ext_resource type="Script" uid="uid://b5tk25f147glq" path="res://scenes/characters/enemy/training_dummy/TrainingDummy.cs" id="1_yf7bi"]
 [ext_resource type="PackedScene" uid="uid://b5jqd46ydk0kg" path="res://scenes/combat/components/Hurtbox.tscn" id="2_4nhtv"]
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_yf7bi"]
+size = Vector2(32, 32)
+
 [node name="TrainingDummy" type="Node2D" unique_id=1294550708 node_paths=PackedStringArray("sprite")]
 script = ExtResource("1_yf7bi")
 sprite = NodePath("Sprite2D")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=919135127]
+scale = Vector2(2, 2)
 texture = ExtResource("1_0bolw")
 
 [node name="Hurtbox" parent="." unique_id=1020424420 instance=ExtResource("2_4nhtv")]
 collision_layer = 8
 collision_mask = 0
+
+[node name="CollisionShape2D" parent="Hurtbox" index="0" unique_id=221828787]
+shape = SubResource("RectangleShape2D_yf7bi")
 
 [editable path="Hurtbox"]

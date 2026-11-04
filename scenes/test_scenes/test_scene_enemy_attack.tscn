@@ -2,6 +2,8 @@
 
 [ext_resource type="PackedScene" uid="uid://buexogmyqp6gq" path="res://scenes/characters/player/Player.tscn" id="1_8xwxj"]
 [ext_resource type="PackedScene" uid="uid://ds37m2nnsk7x1" path="res://scenes/characters/enemy/enemy01/Enemy01.tscn" id="2_8xwxj"]
+[ext_resource type="PackedScene" uid="uid://cycgjvafvoc7l" path="res://scenes/characters/enemy/training_dummy/training_dummy.tscn" id="3_gyv1t"]
+[ext_resource type="PackedScene" uid="uid://dbd5hbgh524ca" path="res://scenes/ui/hud/HUD.tscn" id="4_3lquy"]
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_vqw25"]
 load_path = "res://.godot/imported/white.png-5a24addff47c5cf030d8933848d133b0.ctex"
@@ -66,18 +68,27 @@ position = Vector2(42, 0)
 shape = SubResource("RectangleShape2D_315dr")
 
 [node name="Player" parent="." unique_id=1416864205 instance=ExtResource("1_8xwxj")]
-position = Vector2(562, 492)
+position = Vector2(338, 508)
 
 [node name="CollisionShape2D" parent="Player/Hitbox" parent_id_path=PackedInt32Array(1416864205, 835786613) index="0" unique_id=2128622986]
 shape = SubResource("RectangleShape2D_0tqcn")
 
 [node name="Enemy01" parent="." unique_id=321169640 instance=ExtResource("2_8xwxj")]
-position = Vector2(839, 691)
+position = Vector2(596, 664)
+maxHP = 5000
+
+[node name="TrainingDummy" parent="." unique_id=1294550708 instance=ExtResource("3_gyv1t")]
+position = Vector2(880, 668)
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1764261495]
 position = Vector2(949, 453)
+
+[node name="Hud" parent="." unique_id=404932252 instance=ExtResource("4_3lquy")]
 
 [editable path="Player"]
 [editable path="Player/InputStateMachine"]
 [editable path="Player/Hitbox"]
 [editable path="Player/Hurtbox"]
+[editable path="Enemy01"]
+[editable path="Enemy01/Hitbox"]
+[editable path="Enemy01/Hurtbox"]

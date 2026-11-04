@@ -23,7 +23,7 @@ public partial class HitstunHandler : Node, IInputReceiver
     {
         _frame = 0;
         _player.moveAxis = 0;
-        _sprite.Modulate = new Color(1.0f, 0.2f, 0.2f);
+        _sprite.Modulate = new Color(0.7f, 0.2f, 1.0f);
     }
     public void Exit()
     {

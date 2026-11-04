@@ -32,7 +32,7 @@ public partial class TrainingDummy : Node2D, IDamageable
 		}
 	}
 
-	public bool TakeDamage(int damageAmount)
+	public bool TakeDamage(int damageAmount, MoveData move)
 	{
 		_hp = Mathf.Max(0, _hp - damageAmount);
 		GD.Print($"被攻击： -{damageAmount}, HP: {_hp} / {maxHP}");

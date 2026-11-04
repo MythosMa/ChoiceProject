@@ -10,6 +10,14 @@ public partial class Player : CharacterBody2D, IDamageable
 	[Export]
 	public int maxHP = 100;
 	private int _hp;
+	public int HP => _hp;
+	[Export]
+	public int maxEnergy = 100;
+	private int _energy;
+	public int Energy => _energy;
+	public float energyRegenPerSecond = 30f;
+	private float _energyAccum;
+
 	public const float Speed = 300.0f;
 	public const float JumpVelocity = -400.0f;
 
@@ -22,13 +30,24 @@ public partial class Player : CharacterBody2D, IDamageable
 	public bool invincible = false;
 	public int dodgeCooldown = 0;
 
+	public bool WhiffPunishable = false; // 承诺招可被抓时机判定
+
 	public override void _Ready()
 	{
 		_hp = maxHP;
+		_energy = maxEnergy;
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
+		_energyAccum += (float)delta * energyRegenPerSecond;
+		int gained = Mathf.FloorToInt(_energyAccum);
+		if (gained > 0)
+		{
+			_energy = Mathf.Min(maxEnergy, _energy + gained);
+			_energyAccum -= gained;
+		}
+
 		if (dodgeCooldown > 0)
 		{
 			dodgeCooldown--;
@@ -73,7 +92,17 @@ public partial class Player : CharacterBody2D, IDamageable
 		MoveAndSlide();
 	}
 
-	public bool TakeDamage(int damageAmount)
+	public bool TrySpendEnergy(int energyCost)
+	{
+		if (_energy < energyCost)
+		{
+			return false;
+		}
+		_energy -= energyCost;
+		return true;
+	}
+
+	public bool TakeDamage(int damageAmount, MoveData move)
 	{
 		if (invincible)
 		{
@@ -86,6 +115,7 @@ public partial class Player : CharacterBody2D, IDamageable
 		if (_hp <= 0)
 		{
 			GD.Print("Game Over!");
+			GetTree().CreateTimer(2.0f).Timeout += () => GetTree().ReloadCurrentScene();
 		}
 		return true;
 	}

@@ -7,6 +7,10 @@ public partial class MoveData : Resource
     [Export]
     public string moveName = "default_data";
 
+    [ExportGroup("资源消耗")]
+    [Export]
+    public int energyCost = 20; // 优先级
+
     [ExportGroup("帧数据")]
     [Export]
     public int startupFrames = 4;    // 前摇帧数
@@ -34,6 +38,9 @@ public partial class MoveData : Resource
     [ExportGroup("移动锁定")]
     [Export]
     public bool lockMovement = true; // 是否移动锁定
+    [Export]
+    public bool dodgeCancellable = true;
+
 
     [ExportGroup("可取消性")]
     [Export]
@@ -42,6 +49,7 @@ public partial class MoveData : Resource
     public int cancelWindowStart = 0; // 取消窗口开始帧数
     [Export]
     public int cancelWindowEnd = 0; // 取消窗口结束帧数
+
 
     public int TotalFrames => startupFrames + activeFrames + recoveryFrames;
 }

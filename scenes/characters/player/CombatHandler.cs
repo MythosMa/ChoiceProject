@@ -31,6 +31,10 @@ public partial class CombatHandler : Node, IInputReceiver
 	// Showing 期预输入暂存
 	private int _moveStartInputId = -1;
 
+	private Segment _prevSegment = Segment.Startup;
+
+	public bool CurrentMoveDodgeCancellable => _move == null || _move.dodgeCancellable;
+
 	public Player player { get; set; }
 	public InputStateMachine inputStateMachine { get; set; }
 
@@ -45,7 +49,11 @@ public partial class CombatHandler : Node, IInputReceiver
 	{
 		_chainHits = 1;
 		Direction dir = Tools.GetDirection(InputManager.Instance.Current);
-		StartMove(SelectMove(dir));
+		if (!StartMove(SelectMove(dir)))
+		{
+			_move = null;
+		}
+		// StartMove(SelectMove(dir));
 
 		// InputManager input = InputManager.Instance;
 		// InputButtons pressed = Tools.GetPressed(input.Previous, input.Current);
@@ -62,7 +70,10 @@ public partial class CombatHandler : Node, IInputReceiver
 	public void Exit()
 	{
 		_hitbox.SetActive(false);
+		_hitbox.HideThreat();
 		SetVisual(Colors.White);
+		_move = null;
+		player.WhiffPunishable = false;
 	}
 
 	public void Tick(double delta)
@@ -71,16 +82,24 @@ public partial class CombatHandler : Node, IInputReceiver
 	}
 
 
-	private void StartMove(MoveData move)
+	private bool StartMove(MoveData move)
 	{
 		if (move == null)
 		{
 			GD.Print("招式配置错误，无法出招");
-			return;
+			return false;
 		}
+		if (!player.TrySpendEnergy(move.energyCost))
+		{
+			GD.Print($"能量不足，无法出招, 需要 {move.energyCost} ，当前 {player.Energy}");
+			return false;
+		}
+
 		_move = move;
 		_frameInMove = 0;
-		_hitbox.Configure(move);
+		_prevSegment = Segment.Startup;
+		player.WhiffPunishable = false;
+		_hitbox.Configure(move, player.facing);
 
 
 		GD.Print($"连段第 {_chainHits} 击: {move.moveName}");
@@ -88,6 +107,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		SyncHitbox();
 
 		_moveStartInputId = LastInputId();
+		return true;
 	}
 
 	private int LastInputId()
@@ -98,6 +118,11 @@ public partial class CombatHandler : Node, IInputReceiver
 
 	private void TickPlaying(double delta)
 	{
+		if (_move == null)
+		{
+			inputStateMachine.TransitionTo(inputStateMachine.movementHandler);
+			return;
+		}
 		if (_move != null && !_move.lockMovement)
 		{
 			// todo: 动作演出时不锁定移动的处理逻辑
@@ -107,6 +132,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		if (_frameInMove >= _move.TotalFrames)
 		{
 			_hitbox.SetActive(false);
+			player.WhiffPunishable = false;
 			MoveData next = ResolveNext();
 			if (next != null && _chainHits < chainCap)
 			{
@@ -119,6 +145,14 @@ public partial class CombatHandler : Node, IInputReceiver
 			}
 			return;
 		}
+		Segment seg = CurrentSegment();
+		if (_prevSegment == Segment.Active && seg == Segment.Recovery && !_hitbox.hasConnected && !_move.dodgeCancellable)
+		{
+			player.WhiffPunishable = true;
+			GD.Print($"[挥空] {_move.moveName}挥空，露出破绽~");
+		}
+		_prevSegment = seg;
+
 		SyncHitbox();
 		ApplySegmentVisual();
 	}
@@ -148,13 +182,15 @@ public partial class CombatHandler : Node, IInputReceiver
 		switch (CurrentSegment())
 		{
 			case Segment.Startup:
-				SetVisual(new Color(0.4f, 0.0f, 0.0f));
+				SetVisual(new Color(1.0f, 0.85f, 0.0f));
+				_hitbox.ShowThreat(new Color(1.0f, 0.85f, 0.0f, 0.35f));
 				break;
 			case Segment.Active:
-				SetVisual(new Color(1.0f, 0.5f, 0.0f));
+				SetVisual(new Color(1.0f, 0.1f, 0.1f));
+				_hitbox.ShowThreat(new Color(1.0f, 0.1f, 0.1f, 0.6f));
 				break;
 			case Segment.Recovery:
-				SetVisual(new Color(0.5f, 0.5f, 0.5f));
+				SetVisual(new Color(0.1f, 1.0f, 0.4f));
 				break;
 		}
 	}

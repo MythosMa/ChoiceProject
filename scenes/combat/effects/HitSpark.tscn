@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://bpad5h0sne6wk"]
+
+[ext_resource type="Script" uid="uid://dttf4e2p8el0t" path="res://scenes/combat/effects/HitSpark.cs" id="1_pduch"]
+
+[sub_resource type="Gradient" id="Gradient_pduch"]
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_pduch"]
+gradient = SubResource("Gradient_pduch")
+width = 8
+height = 8
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[node name="HitSpark" type="Node2D" unique_id=2046223205]
+script = ExtResource("1_pduch")
+
+[node name="CPUParticles2D" type="CPUParticles2D" parent="." unique_id=1658076874]
+emitting = false
+amount = 14
+texture = SubResource("GradientTexture2D_pduch")
+lifetime = 0.25
+one_shot = true
+explosiveness = 1.0
+spread = 180.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 90.0
+initial_velocity_max = 220.0
+scale_amount_max = 2.5
+color = Color(1, 0.9639762, 0.7977378, 1)

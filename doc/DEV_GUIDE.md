@@ -1,6 +1,12 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.13  |  日期：2026-09-13  |  状态：Phase 1 实现期（垂直切片完成，出招基础池开发中）
+> 版本：v0.18  |  日期：2026-10-09  |  状态：Phase 2 实现期（S3 第一刀 + 第二刀 均验收通过；**基石② 落地机制·取向R 承诺招 + 抓挥空反斩 已实现验收通过**：heavy 不可闪避取消、挥空被长距离反斩抓）
+>
+> v0.18 变更：第二刀取向 P **手感验收通过**（用户"有点意思了"）；新增基石② 落地机制 **取向 R**（见 §七 S3「取向R」）——`MoveData.dodgeCancellable` 单字段驱动"承诺招不可闪避取消 + 挥空可被抓"，`EnemyStateMachine.TryStartWhiffPunish` 在 Idle/Recovery 起长距离快反斩。修复反斩污染识破状态的三重 bug（起手清空 `_predictedMoveId`），红线代码推论固化。
+> v0.17 变更：第二刀取向 P 实现（见 §七 S3「第二刀」）——`Hitbox.hasConnected` 判扑空 + `EnemyStateMachine.Phase.Stagger`（青白闪烁/无霸体/不可打断）+ `Enemy01.staggerMultiplier=3`；把高回报独占绑定在"做局骗"行为上。平衡顾虑：一次成功骗≈秒杀，分诊顺序见该段。
+> v0.16 变更：第一刀代码级+手感级双过（见 §七 S3「第一刀验收通过」）；§4.4 色表新增敌人识破双态——前摇**金**(躲) / 后摇**毒黄绿**(换招/收手)，修正"双金同色无法区分应对"的陷阱。
+> v0.15 变更：新增「对决模块核心模型（2026-09-29）」——非对称赌注为基石、欺骗为佐料的升维循环，AI 行骗红线（tell 不许撒谎/随机），三刀递进开发次序（见 §七 Phase 2 · S3）。
+> v0.14 变更：原独立交接文档 `HANDOFF.md` 已废弃，其耐久的架构速查 / 中断优先级 / 数值表 / 已知问题已归并进本文（§4.4 修订、§4.5 新增战斗判定件架构、§4.7 新增引擎注意事项、§七 Phase 2 · S2 进度记录）。设计层决策仍归 `GAME_DESIGN.md`。
 
 ---
 
@@ -208,7 +214,54 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 > - **`CancelHitstop()` 只清顿帧、不清震屏（决策）：** 闪避打断顿帧时一度想让 `CancelHitstop` 连 `_shakeFrames` 一并置 0。**否决**：① 顶部 guard `if (_shakeFrames <= 0) return;` 会让手动置 0 跳过 `cam.Offset = Vector2.Zero` 归位，**相机卡偏在最后一次抖动偏移上回不来**；② 震屏是纯表现层、不阻塞任何逻辑，闪避照常执行，留着几帧余韵反而读感更好（"这一拳确实打中了，然后你闪走了"）。故 `CancelHitstop()` 维持 `{ _hitstopFrame = 0; }`，让震屏自然衰减到归位。注：实测时把 hitstop 拉到 120 帧才会觉得"震屏没停"突兀，真实调校 hitstop≈6 帧，残余震屏一闪即过。
 > - **清理调试打印：** 删掉 `ConsumeHitstop` 内每帧刷屏的 `GD.Print("Consuming hitstop frame.")`（顿帧每帧一行，长顿帧会淹没控制台）。
 
-### 4.5 实现约定
+> **修订（2026-09-13，随 S2 敌人侧接入一并重构）：hitstop 改为单计数器，`ConsumeHitstop()` 删除。**
+> - **背景：** S1 只有玩家一个消费方，`ConsumeHitstop()`（读一次即自减）够用。S2 引入敌人后，玩家与敌人**同帧都要读顿帧状态各自冻结**——若各自调 `ConsumeHitstop()` 会**双重递减**，顿帧时长被吃掉一半。
+> - **新契约：** `_hitstopFrame` 只在 **FeedbackSystem 自己的 `_PhysicsProcess`** 里自减（与 shake 同构，单一时钟源）。对外只暴露只读属性 `public bool IsHitstopActive => _hitstopFrame > 0;`。写入接口 `RequestHitstop(frames)`（多次请求取较大值，短顿帧不打断长顿帧）、`CancelHitstop()`（清零，闪避打断时用）。**任何消费者只读 `IsHitstopActive` 冻结，绝不自己减。**
+> - **消费点：** `Player._PhysicsProcess` 与 `Enemy01._PhysicsProcess` 各自在顶部 `if (FeedbackSystem.Instance.IsHitstopActive) return;` 冻结本体。相机震屏仍由 FeedbackSystem 独立驱动，顿帧期间照抖。
+
+### 4.5 战斗判定件与状态机架构（S1/S2 落地，2026-09-13～09-23）
+
+S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**判定件是哑组件、与"谁驱动它"无关**——玩家和敌人共用同一套 Hitbox/Hurtbox/MoveData，区别只在驱动器（玩家=CombatHandler，敌人=EnemyStateMachine）。
+
+**战斗判定件（`scenes/combat/components/`）**
+- `Hitbox`（Area2D，`Monitoring=true`）：`Configure(MoveData)` 按招式设位置/尺寸并记录 move；`SetActive(bool)` 开关判定；`OnAreaEntered` 撞到 `Hurtbox` 时 → `hurtbox.Receiver.TakeDamage(move.damage)`，**仅当返回 true（命中生效）才** `RequestHitstop` + `RequestShake`（无敌/免伤时不给打击反馈）。
+- `Hurtbox`（Area2D，`Monitoring=false / Monitorable=true`）：`Receiver = GetParent() as IDamageable`——**必须是 IDamageable 节点的直接子节点**。
+- `IDamageable`（文件名有 typo：`IDamanageable.cs`）：`bool TakeDamage(int damageAmount)`——**返回 bool** 表示这次伤害是否真正生效（S2 从 `void` 改来，用于让无敌/免伤挡掉反馈，见下方 Hitbox）。
+
+**MoveData（`scripts/data/MoveData.cs`，`[GlobalClass]` Resource，玩家与敌人共用）**
+字段：`moveName`；`startupFrames/activeFrames/recoveryFrames`（=预警/攻击/破绽，`TotalFrames`=三者之和）；`damage/hitstopFrames/shakeMagnitude/knockback`；`hitboxOffset/hitboxSize`；`lockMovement`；`canBeCancelled/cancelWindowStart/cancelWindowEnd`（Phase 2 留字段**不接线**）。
+
+**中断优先级（决策，GAME_DESIGN §6 未落档，此处固化）**
+> 受击(hitstun) > 闪避(dodge) > 顿帧门(hitstop gate) > 普通 Tick。**例外：闪避无敌期内被命中 → 命中无效**（在 `TakeDamage` 层挡，不触发受击）。
+> - 落地位置：`Player._PhysicsProcess` 顶部按此顺序设门——① 受击请求一来就**立即** `ForceHitstun()`（当场打断当前招，不等顿帧）；② 再 `TryDodgeInterrupt()`（命中即 `CancelHitstop()`）；③ 否则 `IsHitstopActive` 就 `return` 冻结。
+> - 受击用**请求化**（`TakeDamage` 只置 `_hitstunRequested=true`，不在 Area 信号回调里直接转状态），由 `_PhysicsProcess` 消费——避免在物理信号里改状态机时序。
+> - `Exit()` 是清理契约：任意状态被中断时，旧态 `Exit()` 负责关判定框 + 复位颜色 + 清无敌标志，这是"任何状态可被安全打断"的基础。
+
+**6 色 telegraph 语言（美术方向，敌我共用）**
+> Demo 期用色块当预兆。**不变式：同一相位，玩家与敌人用同一颜色**——共用一套可读语言，玩家学会读敌人的颜色就等于学会读自己的招式阶段。受击色必须是与所有战斗色**明显区分的独立色相**，才能让"打断"这一下被看清。
+
+| 色 | RGB | 语义 | 玩家 | 敌人 |
+|----|-----|------|------|------|
+| 白 | (1,1,1) | 中性 / Idle / Movement / 各态 Exit 复位 | ✅ | ✅ |
+| 黄 | (1.0,0.85,0.0) | Startup 预警（"要出手了"） | ✅ | ✅ |
+| 红 | (1.0,0.1,0.1) | Active 攻击（判定生效中） | ✅ | ✅ |
+| 绿 | (0.1,1.0,0.4) | Recovery 破绽（**安全**确反窗，随便打） | ✅ | ✅ |
+| 紫 | (0.7,0.2,1.0) | Hitstun 受击硬直 | ✅ | ✅ |
+| 蓝 | (0.2,0.5,1.0) | Dodge 闪避（无敌） | ✅ | —（敌人不闪） |
+| 金 | (1.0,0.6,0.0) | 敌人**识破·前摇**：反打将至 + 习惯招被霸体 → **躲** | — | ✅ |
+| 毒黄绿 | (0.7,1.0,0.0) | 敌人**识破·后摇**：确反窗被预判招污染 → **换招/收手**（非预判招仍可确反） | — | ✅ |
+
+> 落地：玩家 `CombatHandler.ApplySegmentVisual`（黄/红/绿）+ `HitstunHandler`（紫）+ `DodgeHandler`（蓝）；敌人 `EnemyStateMachine.ApplyTelegraph`（白/黄/红/绿/紫 + 识破态金/毒黄绿）。调校时**关掉碰撞框 debug 绘制**，颜色才醒目。
+>
+> **⚠️ 识破态双金陷阱（2026-09-29 修正）：** 前摇金与后摇金若同色，玩家无法区分"反打要来了（该躲）"与"确反窗是陷阱（该换招）"——两者应对相反。故后摇识破改用**毒黄绿**：留在绿家族（仍读出"这是后摇确反窗"）但明显发黄=被污染。若纯绿/毒黄绿仍难辨，把毒黄绿推到 `(0.9,1.0,0.1)` 偏柠檬黄。
+
+**敌人侧（`scenes/characters/enemy/enemy01/`）**
+- `Enemy01`（CharacterBody2D, IDamageable）：`[Export] enemyStateMachine`、`[Export] attackHitbox`；`_PhysicsProcess` 先 `if (IsHitstopActive) return;` 再 `enemyStateMachine.Tick(delta)`。`TakeDamage`：Recovery 段被命中判为**确反**（伤害 ×`counterHitMultiplier`）→ 扣血 → `enemyStateMachine.Interrupt()` → 打印。
+- `EnemyStateMachine`（Node，enum `Phase{Idle,Startup,Active,Recovery,Hitstun}`）：用**相位机**，**不复用** `IInputReceiver`（那是玩家输入专用）。`EnterPhase` 在 Startup 时 `Configure(attackMove)`、并 `SetActive(next==Active)`。`Interrupt()` = `EnterPhase(Hitstun)`——**被击中即完全取消当前攻击**（hitbox 自动关）→ 僵直 `hitstunFrames` → 回 Idle。这落实了"敌人 #1 全可打断（无霸体）"的设计，也是 payoff 三角里"读对→确反"的确定打断臂。
+  - 敌人 #2 需多态行为时再抽 `IEnemyState`，不预先建。
+- **`hitstunFrames` 归属（待迁移）：** 当前放在 EnemyStateMachine 上作固定值；概念上应由**出招方的 MoveData** 决定（重招=更长硬直），S3/S4 再迁移。
+
+### 4.6 实现约定
 
 - **可复用组件的形状 = 编辑器预设 + 按实例独立，不用代码 new。** Hitbox/Hurtbox 的 CollisionShape2D 形状在编辑器里预设（RectangleShape2D 等），但要让每个场景实例各持一份、互不共享，Godot 有**两种等价手法**，二选一即可：
   - **唯一化（Make Unique）：** 在 .tscn 里选中被引用的资源（如 CollisionShape2D 的 Shape）→ 右键 `唯一化 / Make Unique`。Godot 会把共享资源**就地拷贝成本场景私有的一份**（.tscn 里生成一条本场景专属 sub_resource）。玩家 Hurtbox 用的就是这个——Player.tscn 里生成了私有的 `RectangleShape2D_lxifr`，与 Hurtbox.tscn 共享的 `RectangleShape2D_7xy7u` 彻底脱钩。**每个实例都要手动唯一化一次。**
@@ -231,6 +284,20 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
   - **掩码规则（谁检测谁）：** 攻击方 Hitbox 的**掩码 = 对方 Hurtbox 所在层**。玩家 Hitbox：层=3、掩码=**4**（enemy_hurtbox，不含 2 → 不自伤，仍能打到假人）；敌人 Hitbox（S2）：层=5、掩码=**2**（player_hurtbox）。
   - **Hurtbox 只需设对"层"：** 它是 monitorable、不 monitoring（`Hurtbox.cs` 里 `Monitoring=false / Monitorable=true`），掩码用不上。命中由 **monitoring 的 Hitbox** 发 `area_entered`，故检测关系完全由"Hitbox 的掩码指向哪个 Hurtbox 层"决定。
   - **身体碰撞不分进这套：** Area 间走 `area_entered`、CharacterBody2D 身体走 `move_and_slide`（body 碰撞），两套互不干扰。只给 Area 组件（Hitbox/Hurtbox）分层即可，玩家/敌人身体的层与掩码维持现状。
+
+### 4.7 Godot 引擎使用注意事项（踩坑记录）
+
+> 引擎级通用坑，跨模块适用。新接手先扫一遍，避免重踩。同类坑往后追加。
+
+**1. 物理信号回调里禁止同步改「物理空间结构」（`flushing_queries`）**
+
+- **现象：** 在 `area_entered` / `body_entered` 回调链里直接 `CollisionShape2D.Disabled = x`、切 `Monitoring/Monitorable`、或 `add_child` 一个物理体 → 报错 `Can't change this state while flushing queries. Use call_deferred() or set_deferred() to change monitoring state instead.`（实战：S2 敌人受击打断，`Hitbox.OnAreaEntered → Enemy01.TakeDamage → Interrupt → SetActive` 撞上，见 §七 S2-6）。
+- **根因：** `area_entered` 是物理引擎在 `flush_queries()` **遍历物理空间的过程中**派发的。此刻改空间结构 = 边遍历边改集合，会破坏遍历。引擎用 `flushing_queries` 标志拦截并**当场报错拒绝**（宁可停下，也不让它悄悄算错）。注意节点 `_physics_process` 跑在遍历之外，那里改结构是允许的——所以玩家 `CombatHandler` 在 `Tick` 里 `SetActive` 从不报错。
+- **精确边界（别记成"回调里啥都不能改"）：** 只有**改物理空间结构**被拦（shape 开关 / monitoring / 增删物理体）。**其余一切照常立即改**：扣血、置标志、改 `Modulate`、播音效、起计时器、生成非物理节点。别的信号（`Button.pressed` 等）不从物理遍历里发出，无此限制。所以"信号触发操作"这一普遍模式没问题，冲突只在**「物理信号」×「改物理结构」**这个窄交集。
+- **修法：** 结构变更走 `SetDeferred` / `CallDeferred`——把改动排进引擎延迟队列（command buffer），到帧末安全点再 apply，**作用于下一次 flush**（不追溯本帧已排上的 overlap）。本项目落地：`Hitbox.SetActive` 用 `_shape.SetDeferred(CollisionShape2D.PropertyName.Disabled, !active)`，**单点封装**让所有驱动器（玩家 `SyncHitbox`、敌人 `EnterPhase`）自动 flush-safe。
+- **副作用（可接受）：** ① 判定框开关延迟到帧末生效（占位帧数下无感）；② 同帧对拼（trade）——敌人 Active 帧你打中它、它的框也压着你，两边信号同 flush 触发，`SetDeferred` 挡不住本帧已排的 overlap。S2 靠玩家全程无敌闪避兜底；将来要"打断优先于被击"再上仲裁层。
+- **同源替代（更架构化）：** 也可像玩家受击那样**请求化**——回调里只置标志，`_physics_process`（遍历之外）消费再改结构。适合"要切整个状态机"的复杂中断；单纯关判定框用 `SetDeferred` 更省。
+- **行业同款：** Box2D（`Step` 中禁增删 body/fixture）、Unity（物理回调里用 `Destroy` 而非 `DestroyImmediate`）、ECS command buffer，皆同一"仿真步内只读、结构变更排队到步外"约束。
 
 ---
 
@@ -430,6 +497,141 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 > **验证闸门：** S1–S4 跑通后，对照 GAME_DESIGN §9.4 止损线 Q1（面对敌人会犹豫用哪招吗）/ Q4（愿意反复打吗）——这是项目**第一次能真正回答"择成不成立"**。
 > **下方 task 1–12 仍是 Phase 2 的完整结构**，但其"先框架（task 1–3）后敌人（task 6）"的字面顺序**被本切入序列取代**：框架是 S2 打通后提取的产物，不是起点。
 
+**切入序列进度（2026-09-23 更新）**
+
+| 步 | 内容 | 状态 |
+|----|------|------|
+| **S1** | 玩家可受击（Hurtbox + IDamageable + HP + 碰撞分层） | ✅ 完成（运行时验证并入 S2-6） |
+| **S2** | 一个直球型敌人端到端（预兆→攻击→固定破绽）+ 玩家受击闭环 | ✅ 完成（S2-1~S2-6 全通过，见下） |
+| **S3** | ~~反推确反 roster~~ → **改为《择》概念最小验证原型**（见下方「方向修正」） | 🔨 进行中 |
+| **S4** | 确反 payoff 差异化（确反窗口 → 伤害/反馈强度差） | ⏳ 未开始（视 S3 结论重排） |
+
+> **方向修正（2026-09-23，用户拍板：打破原路线，原型优先验证《择》）**
+> 原 S3「反推确反 roster」被推翻——**反应式确反 = "先看题目再作答"，结构上等同《九日》/只狼的执行精通，无差异化**。改为**最小原型直接验证《择》概念是否成立**，避免做到后期才发现走不通、沦为 Godot 练手项目。原型两根支柱：
+> 1. **资源经济（核心支柱，用户确认）：** 任何输出都消耗"气"、气缓慢回复——**克制无脑连段**，逼出"何时该出招"的决策。与"闪避必加 CD"同理：没有代价的输出不是健康方向。
+> 2. **读倾向敌人（差异化本体）：** 敌人统计玩家重复用同一招，识破后在 Startup 架**针对该招的霸体 + 金色 tell**；玩家可**换招打穿霸体**、或闪避后确反。**红线：读倾向（有 tell、可反制、统计性）≠ 读指令（瞬时反应按键、无 tell、无反制 = 玩家骂"粪"，见法环）。**
+>
+> **验证问题（playtest 只问一句）：** "读一个在读我的对手 + 管资源"，好不好玩、公不公平？乐趣长在"读 AI"还是"管资源 + 制造处境"？——哪边带感，核心就往哪压。此原型**一次同时证伪/证实**用户脑补的情景一（适应会被钓到无敌 → 终结）与情景二（纯猜拳 → 太浅）。理论共识：PvE 不需要 PvP 的无限深度，靠**处境多样 + 资源压力 + 难度升级**续命；"读倾向 AI"因会被解开，**只当佐料、不承重**。
+
+> **对决模块核心模型（2026-09-29，用户综合拍板 —— 约束后续所有对决开发）**
+> S3 原型跑通后暴露一个结构缺陷：**频率读只是"防重复税"，不是"选择题"**——玩家用 jab/heavy **完美 50/50 交替**即可零思考地把占比永远压在阈值下、令识破永不触发，反而开出"交替白嫖"这个新统治策略。纯博弈会退化成猜拳（"很蠢、没有更高能刺激点"）。故把核心定型为**三层一体、循环升维**：
+> - **基石 = ②非对称赌注 + ①被读重罚（一体两面）：** 《择》本体是"我这次选择对不对"。两招风险收益分化（jab=安全/便宜/低收益但"显而易见"；heavy=冒险/昂贵/高收益），①"被读到=重罚"是②的**代价面**——没有代价则赌注为假（现状两招混着打都安全=赌注为零）。此层永远在场。
+> - **佐料 = ③欺骗（彩蛋 / 意外快感）：** 玩家做局骗 AI（故意喂频率诱它金某招、再用另一招打穿），AI 也读玩家的骗招习惯反制。让博弈"解不开"，是高能刺激点。
+> - **循环升维：** 赌注 → 被读代价 → 用欺骗操纵读 → 欺骗改变出手分布 → AI 升维读"骗招习惯" → 回到赌注（连"要不要骗"都成新选择）。一阶读频率 → 二阶读骗招模式 → …**永不解完**，这是"不蠢"的根因。
+>
+> **⚠️ AI 行骗红线（地基，不可越；用户原话确认）：**
+> - ✅ **公平的骗：** AI 的"骗"只体现在**它选择霸体哪一招**的决策上，该决策**仍基于可读规律**（一阶频率 / 二阶骗招习惯）。**金色 tell 永远诚实——金哪招就真霸体哪招。** 玩家死后能复盘"它识破了我的套路"→ 意外但服气。
+> - ❌ **粪的骗：** 金色 tell 撒谎（显示金 jab、实际霸体 heavy）、纯随机霸体无规律、或"放 A 招前摇却出 B 招"→ 无从反应 / 复盘 → 剥夺能动性 = 玩家骂"粪"（法环读指令）。用户原话："即便要骗也得合理，放 A 前摇结果出 B 明显是作弊。"
+> - 意外快感的正确来源 = AI 读到玩家**自己都没意识到的更高阶模式**，而非耍赖或掷骰子。
+>
+> **开发次序（三刀递进 = 打的概念 → 有效地打 → 有来有回地打；每层验证过再上下层，不跳层）：**
+>
+> | 刀 | 做什么 | 验收问题 |
+> |----|--------|---------|
+> | **第一刀｜基石 ②+①** | 两招非对称化（速度/伤害/气耗/落空代价分化）+ 被读到=重罚（弹招进硬直、吃确反） | §9.4 Q1「会犹豫用哪招吗」 |
+> | **第二刀｜玩家欺骗 ③a** | 做局有回报：骗出金霸体挥空 → 超长 Recovery → 确反 ×3 | 「会主动去骗吗 / 骗成功爽吗」 |
+> | **第三刀｜AI 反欺骗 ③b** | AI 读"骗招习惯"（二阶），偶尔金你以为安全的那招 | 「被看穿是服气，还是骂粪」 |
+>
+> **频率读旋钮（`readWindow` / `confidenceThreshold`）注意事项：** 敌人 50 血、几招就死，`readWindow` 别设太大否则**一场内攒不满样本、机制一次都不触发**（当前 8 偏大）；或改成统计"出手尝试"而非"命中"。觉得 AI 太强 → 调高阈值 / 缩小窗口；读不出来 → 调低。均为 `[Export]`，不硬编码。
+> **深度纪律：** 往"敌人的读 + 处境"堆，不靠加招式数（moveUp/Down/Left 现为 null 走 fallback，jab/heavy 两招够用）。
+
+> **✅ 第一刀验收通过（2026-09-29，代码级 + 手感级双过）**
+> **取向 X 落地：** 霸体从"只覆盖 Startup/Active"延伸到 **Recovery**——但只对 `_predictedMoveId` 那一招生效（`IsArmoredAgainst` 加 `|| _phase == Phase.Recovery`）。`Enemy01.TakeDamage` 霸体命中时调 `PunishRead`：`player.TakeDamage(attackMove.damage × armorPunishMultiplier=1.5 → 18)` → 触发 `_hitstunRequested` → 下一帧 `ForceHitstun`，**扣血 + 夺回合**一步到位。后摇识破态用**毒黄绿** tell（见 §4.4 色表）。
+> **实测日志证实两半都成立（同一后摇窗、读没读到结果相反）：**
+> - 绿后摇（无预判）→ jab 确反吃**双倍 12**（`确反！敌人 -12`）。
+> - 毒黄绿后摇（预判=jab）→ 同招 jab 打进去 = `匹配=True 霸体段=True` → **被废 + 玩家 -18 + 进 HitstunHandler**。惩罚**未双重叠加**（触发在后摇、敌人攻击判定已关，只 -18 无第二口），回答了"会不会太狠"的疑虑。
+> **金窗不是死路（有解 = 择成立）：** 毒黄绿后摇时改用 **heavy（非预判招）** → 不被霸体 → 吃 heavy 双倍；或收手等毒黄绿褪成绿。决策空间：绿窗 jab 白嫖 / 金窗 jab 找死、heavy 反赚、或收手。
+> **手感验收（§9.4 Q1「会犹豫用哪招吗」）：** 用户反馈"手感还可以，有一些多次尝试的意愿"——**犹豫 + 想再来一把 = 第一刀成立**（比日志更硬的信号）。
+> **未做（纪律性押后，非欠债）：** ①读招算法仍是"同招连命中 `greedThreshold=3` 次"的重复计数，**未换成频率滑窗**——第一刀只验证"读与确反窗相交"，混招/交替读取留第二刀后。②jab/heavy 数值未锐化。**样本量待盯：** 敌人 50 血几刀就死，若正式玩觉得金色/毒黄绿太少见，第一个调 `greedThreshold` 3→2，或改"出手尝试"计数。**收尾：** `IsArmoredAgainst` 里的 `[霸体检查]` 诊断 print 验收完可删。
+
+> **✅ 第二刀｜玩家欺骗③a（取向 P，2026-09-29 实现，2026-10-09 手感验收通过）**
+> **取向 P（用户拍板）：** 踉跄大破绽**只对"金霸体反打扑空"生效**，普通招挥空不算——把高回报**独占绑定在"做局骗"这个行为上**，欺骗才值得主动做（取向 Q=任何挥空都踉跄，会把欺骗稀释成闪避附带品，弃）。
+> **核心因果链：** 喂频率骗敌人金霸体反打（`_predictedMoveId` 锁定）→ 玩家闪避/拉开让那记反打**扑空**（`hasConnected=false`）→ 霸体白押 → 进 **`Stagger` 踉跄相位**（`staggerFrames=50`，远长于普通 Recovery 40；青白闪烁 tell；`IsArmoredAgainst` 不含 Stagger = 无霸体；`Interrupt` 顶部守卫 → 踉跄期间被打不打断，可连打满窗）→ 任意招 **`staggerMultiplier=3.0` ×3 确反**。
+> **改动三文件：** ①`Hitbox.cs` 加 `hasConnected`（Configure 重置、命中且 `hitLanded` 时置真；闪避因 `invincible` 使 TakeDamage 返回 false → 天然算扑空）。②`EnemyStateMachine.cs` 加 `Phase.Stagger` + `staggerFrames` Export + Active→(Stagger|Recovery) 分支 + Interrupt 守卫 + EnterPhase(Stagger) 顿挫(RequestShake) + ApplyTelegraph 青白闪烁 `(_frame/4)%2`。③`Enemy01.cs` 加 `staggerMultiplier` + TakeDamage 三分支伤害(Stagger×3/Recovery×2/普通×1)。
+> **红线自查（通过）：** 踉跄源于可读因果（你闪掉了它的承诺反打），非随机；金 tell 依旧诚实霸体了 jab，只是那一霸体落空。玩家可完整复盘"喂 jab→它金反打→我闪→它扑空踉跄→我 ×3"。
+> **涌现决策（待验证是否成立）：** 金反打前摇只霸体预判招，玩家可 **heavy 直接打断金前摇**(走 Interrupt→Hitstun，安全小回报) vs **闪避骗扑空**(卡时机、×3 大回报)——两条路的权衡若被玩家感受到 = 第二刀的"择"成立。
+> **⚠️ 平衡顾虑（实测重点）：** 敌人 50 血，bait 用掉 ~20 血后一记 heavy×3=42 → **一次成功骗 ≈ 秒杀**。爽感大概率够，但风险是"每局无脑复现固定套路"。**分诊顺序（别乱调）：** 先只感受爽不爽(不爽=tell/节奏问题非数值)→ 嫌易秒杀调 `staggerMultiplier` 3→2 → 还快调 `staggerFrames` 50→35 → 最后才动 `maxHP`。
+> **承重旋钮首次受压：** "闪避冷却 > 敌人攻击间隔"(S2-4)——若能无限闪避无脑骗踉跄，P 会崩成闪避 spam，实测重点验。
+> **验收问题：** 「会主动去骗吗 / 骗成功爽吗」。**验收结果（2026-10-09）：** 用户复现"连打 3 jab → 敌人金色识破反打 → 我离开让它扑空 → 青白 Stagger → 上去确反"，反馈"有点意思了"= 做局有回报的循环成立、且触发逻辑可被玩家读懂（青白只在"金起手→躲开→扑空"时出现）。
+
+> **✅ 基石② 落地机制｜取向 R 承诺招 + 抓挥空反斩（2026-10-09 实现 + 验收通过）**
+> **诊断（用户："现在动作简单，为了测试，压根没有权衡的意味"）：** 根因 = 闪避能取消**任何**招 → heavy 零承诺成本（随时闪避逃单）；且敌人静止 + 攻击距离(~32px)远短于玩家 heavy(~120px) → 敌人威胁不到玩家出 heavy。基石②（非对称赌注）其实从没真正落地，heavy 成了 jab 的严格上位。
+> **机制（`dodgeCancellable` 单字段驱动两件事）：** false = 承诺招(heavy)——①出手后闪避键不能中途取消（`InputStateMachine.TryDodgeInterrupt` 查到 `!combatHandler.CurrentMoveDodgeCancellable` 直接 return false）、锁死全程；②Active 结束没连上 = 挥空 → `player.WhiffPunishable=true`（`CombatHandler.TickPlaying` 用 `_prevSegment==Active && seg==Recovery && !hasConnected && !dodgeCancellable` 检测）→ 敌人在 `punishRange` 内起长距离快反斩（`punishMove`：前摇 6 帧 / reach~140）抓你后摇。jab 保持 `dodgeCancellable=true` = 安全试探。**权衡立起：jab 安全低伤 vs heavy 高伤但打空吃反斩。**
+> **⚠️ 设计律（durable）：抓挥空反斩的应对在"上游"不在"下游"。** 玩家已被锁死不能取消 heavy，所以反斩"必中"是对的、不破坏权衡；规避手段是**一开始就别在坏距离出 heavy**，而不是挥空后再去躲。故让反斩更可靠 ≠ unfair。
+> **触发难时的调参顺序（别乱调）：** 先**放宽相位窗口**（检测从"只在 Idle"扩到"`(Idle || Recovery) && TryStartWhiffPunish()`"挪到 Tick switch 前，覆盖率 ~28%→~66%）→ 还不够**再拉大 `punishRange`**(140→170)，一次只动一个变量，避免变成"heavy 一空必死"没人敢用。
+> **修复的三重污染 bug（红线代码推论，durable）：** 反斩起手曾未清 `_predictedMoveId`，导致 ①反斩披**金色 tell 谎报**（玩家读金以为霸体识破、实为普通快攻）②误带霸体 ③反斩打空误触发本属金反击的 **Stagger(青白)**、玩家无从把握触发逻辑。修法 = `TryStartWhiffPunish` 里 `EnterPhase(Startup)` 前加 `_predictedMoveId = null;`。这是"金色 tell 永远诚实"在实现上的直接要求（详见记忆 [[combat-duel-core-model]] 红线代码推论）。
+> **两个青白 Stagger 的区分（用户一度把正确的当 bug）：** 先**金**起手 → 你躲开 → Stagger = **第二刀正路奖励**（上去 ×3），可预测、可复盘；**heavy 挥空** → 敌人黄反斩打空 → Stagger = 已修的污染 bug，现反斩打空只走**绿 Recovery**（普通确反窗）。颜色语言恢复诚实：金=识破反击(躲/可踉跄×3)、黄=普通攻击或反斩(打空只绿窗)。
+> **验收结果（2026-10-09）：** 三步全过——①jab 可闪避取消 / heavy 锁死全程；②heavy 挥空触发反斩（放宽相位后"被反制的情况多一些了"）；③玩家开始掂量出手距离。用户"有点意思了，所有的测试看起来没问题了"。
+> **收尾待办：** `IsArmoredAgainst` 里的 `[霸体检查]` 诊断 print、`Enemy01.TakeDamage` 里注释掉的旧伤害代码（lines 58-65）均可删；`energyRegenPerSecond=30` 偏松（想让气耗成为约束可降到 ~12）；读招仍是重复计数非频率滑窗；闪避方向硬编码为 facing（`DodgeHandler._dodgeDirection` 未用）。
+
+> **S2 子步记录：**
+> - **S2-1** 敌人本体 + 出题循环（`Idle→预警→攻击→破绽`，颜色当预兆）✅
+> - **S2-2** 敌人攻击驱动器（EnemyStateMachine 驱动自己的 Hitbox）+ hitstop 单计数重构 ✅（机制见 §4.4 修订 2026-09-13）
+> - **S2-3** 玩家受击态（HitstunHandler + 请求化中断 + 优先级门）✅ —— 曾有时序缺陷（受击切换被"等顿帧结束"挡住，叠加 `hitstopFrames=60` 放大成肉眼可见延迟），已修：`_PhysicsProcess` 顶部受击请求一到就立即 `ForceHitstun`，顿帧改在受击态内定格（优先级门见 §4.5）。用户实测"出招中被打断"通过。
+> - **S2-4** 闪避冷却 + 防御臂 ✅ —— **改为全程无敌**（原 i-frames 方案押后，先保证闪避期内完全免伤）：`DodgeHandler.Enter` 置 `player.invincible=true` + `player.dodgeCooldown=cooldownFrames`，`Exit` 复位 `invincible=false`（清理契约）；`Player.TakeDamage` 无敌时 `return false`（免伤且不触发受击/反馈）；`InputStateMachine.TryDodgeInterrupt` 有 `dodgeCooldown>0` 闸门，杜绝无限闪避。**承重旋钮「闪避冷却 > 敌人攻击间隔」直球敌人 #1 验证不了**（单发可反应、压不到 CD），敌人 #2 才显形。
+> - **S2-5** 敌人可受击 + 确反 payoff ✅ —— 敌人加 Hurtbox（layer=8/mask=0）+ 实现 IDamageable；Recovery 段被命中判确反，伤害 ×`counterHitMultiplier`（2.0）。
+> - **S2-6** 碰撞分层收口 + 敌人受击打断 + 调试场景 ✅ —— 补上**敌人的受击打断**（`EnemyStateMachine.Phase.Hitstun` + `Interrupt()`，被击中即取消当前攻击、闪紫、僵直后回 Idle，见 §4.5）。接线后触发引擎报错 `Can't change this state while flushing queries`（在 `area_entered` 回调链里同步关判定框），已修：`Hitbox.SetActive` 改用 `SetDeferred`（原理与约定见 §4.7）。调试场景 `test_scene_enemy_attack.tscn`（玩家 + Enemy01 + 地形 + 相机）。碰撞分层审计通过：构造上无法自伤/误伤（各 Hitbox 掩码只指向对方 Hurtbox 层）。
+> - **待验证清单（S2-6 收尾）：** 双向命中 / 无自伤 / 无误伤 / 闪避免伤——四条过后 Phase 2 · S2 追踪弹闭合。
+
+**S2 数值表（占位，全部待反复调优；锚定街霸6 + 为银河城可读性放宽 ~1.5-2x；Godot 物理 60Hz，帧↔SF6 帧 1:1）**
+
+敌人 #1 攻击（`scenes/characters/enemy/enemy01/Enemy01Attack.tres`，已由 `Enemy01.tscn` 的 `attackMove` 外部引用；数值 = 可读规格，已确认生效）：
+
+| 字段 | 规格值 | 说明 |
+|------|--------|------|
+| startupFrames（预警/黄） | 30 | SF6 Drive Impact ~26f，放宽到 0.5s 可读 |
+| activeFrames（攻击/红） | 6 | 攻击判定窗 |
+| recoveryFrames（破绽=确反窗/绿） | 40 | ⭐承重；SF6 whiff 确反 ~15-20f，放宽 2x 教学，S4 收紧 |
+| damage | 12 | |
+| hitstopFrames | 6 | ✅ 走 MoveData 默认 6（调试期的 60 已清） |
+| shakeMagnitude | 8 | MoveData 默认 |
+| knockback | (0,0) | A4-3 击退仍押后 |
+| hitboxOffset / hitboxSize | (20,0) / (24,16) | 贴身判定（身前 8~32px）；**朝向已在 Startup 锁定朝玩家**（最小朝向补丁后不再是固定 +X），玩家须贴近才吃得到 |
+
+玩家侧 / 经济：
+
+| 项 | 值 | 位置 |
+|----|----|------|
+| hitstunFrames（受击硬直） | 20 | HitstunHandler |
+| 受击打断 | 全可打断（#1 无霸体） | 霸体留后期单点守卫 |
+| dodgeFrames（闪避时长） | 12 | DodgeHandler |
+| 无敌策略 | **全程无敌**（非 i-frames） | DodgeHandler.Enter/Exit |
+| cooldownFrames（闪避冷却） | 60 | ⭐承重旋钮，须 > 敌人攻击间隔 |
+| 玩家 maxHP | 100 | Player |
+| 敌人 #1 maxHP | 50 | Enemy01 |
+| 确反倍率 | 2.0 | Enemy01.counterHitMultiplier |
+
+> 敌人 #1 单发节奏 ≈ 30+6+40 + idle(~30) ≈ 106f ≈ 1.77s/次；闪避冷却 60f < 节奏 106f，故 #1 每招都闪得掉——「冷却 > 攻击间隔」承重旋钮在 #1 上刻意验证不了（教学直球），留敌人 #2 显形。
+> **玩家普攻 `resources/move/action_1.tres`（openerMove）当前状态：** S2-3 观察期放大的帧数已清，现全走 MoveData 默认（startup4/active4/recovery10，TotalFrames=18），hitboxOffset/Size = (100,0)/(200,20)（偏大的占位reach）。原始 startupFrames=12 已丢失——属占位值，S3 反推确反 roster 时连同其它方向招一起正式调。
+
+**S2 检查点结论（2026-09-23，用户实测）**
+
+跑的是轻量检查点，**不是** GAME_DESIGN §9.4 止损门——§9.4 Q1（面对敌人会犹豫用哪招）/ Q3（第二遍策略会变）需 S3 roster + S4 敌人多样性才有意义，S2 末跑必假阴性，故押后。三条实测反馈：
+- **A（颜色/体型可读性）：** 当前阈值下预警色 + 体型区分明显，用户"反应过来按闪避躲掉敌人技能"可行。**但暴露一个结构缺口：玩家与敌人都只能朝 +X 攻击**（无朝向翻转），博弈被压成"要么单测闪避、要么单测确反"，绕后/对向的二维博弈不存在 → 催生下方「最小朝向」前置补丁。
+- **B（抓时机打人的反馈循环）：** "停不下来想多点两下"——枯燥感现阶段未出现，substrate 手感正向。
+- **C（闪避的防御回报）：** 闪避=一次保命、防御回报拉满，但当前无进攻回报对照，判断需战斗丰富后再做。
+
+> **结论：substrate 通过**（B 强正向）。A 暴露的朝向缺口由「最小朝向补丁」补，补完即进 S3。
+
+**S2→S3 前置补丁：最小朝向（2026-09-23，✅ 完成并实测通过）**
+
+解锁 1D→2D 博弈的最小改动——**纯机制**（让攻击判定框能朝两侧伸），**不做视觉翻转**（色块左右对称，翻了看不出，sprite flip 押后）。四处改动：
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | 编辑器 | Player 根节点加入 `player` 组（Node 面板 → 组标签页），供敌人按组名查找，解耦 EnemyStateMachine 对 Player 类型/场景结构的依赖 |
+| 2 | `Hitbox.cs` | `Configure(MoveData move, int facing = 1)`：`Position = new Vector2(move.hitboxOffset.X * facing, move.hitboxOffset.Y)`（只镜像 X，Y 不变；默认 `=1` 保证旧调用点不改也编译，行为等同朝右） |
+| 3 | `CombatHandler.cs` | `StartMove` 里 `_hitbox.Configure(move, player.facing)`；`player.facing` 移动时更新、出招时锁定 → 读到的是"出招瞬间朝向" |
+| 4 | `EnemyStateMachine.cs` | 加 `_facing`/`_player`（`Node2D`）字段 + `UpdateFacing()`（`_player ??= GetTree().GetFirstNodeInGroup("player")`，按 `GlobalPosition.X` 定 ±1）；在 `EnterPhase` 的 **Startup 分支**先 `UpdateFacing()` 再 `Configure(attackMove, _facing)` |
+
+> **朝向锁定时机 = Startup（黄/预警开始），设计正确：** 敌人亮预警那一刻就把方向定死，玩家在 30f 预警窗内能读到"往哪打"，再决定闪避还是绕后确反。若做成 Active 瞬间才转向，预警失去意义、无法博弈（对照 GAME_DESIGN"何时清晰"模型）。`_player` 用 `Node2D` 而非 `Player` 类型，同样为解耦、便于加第二种敌人。
+
+**已知小问题 / typo / 遗留（S2 收口时点）**
+- **`HitstunHandler.tscn` 根节点名 = `HistunHandler`**（少个 t）。export 已对上（`InputStateMachine.tscn` 里 `hitstunHandler = NodePath("HistunHandler")`）能跑；改名须同步该 NodePath。
+- **`IDamageable` 文件名 typo = `IDamanageable.cs`**。能编译；改名须同步 `.csproj` 无碍（Godot 靠类名不靠文件名）。
+- **输入吞边沿（独立 bug，先记着）：** `Player._PhysicsProcess` 在顿帧门/受击门会提前 `return`（不调 `Tick`），而 `InputManager` 仍每帧推进 `Previous/Current`——顿帧或硬直期间按下的攻击，其上升沿会被吞（回 movement 时 `Previous==Current` 无新边沿）。现在无碍；S3 做"硬直/顿帧后接招"时会变成"我按了却没出招"的手感问题——届时要么在受击/顿帧期暂存攻击边沿，要么改成消费 Buffer 而非实时边沿。
+- **死亡无处理：** `Enemy01.TakeDamage` 里 `_hp<=0` 只打印"敌人倒下！"，无死亡态/停输入；玩家侧同理。后续补。
+
 | # | 任务 | 涉及文件 | 说明 |
 |---|------|---------|------|
 | 1 | 敌人基础框架 | Enemies/Base/EnemyBase.tscn + .cs | 敌人节点树、通用状态机、受击逻辑 |
@@ -518,7 +720,7 @@ Player._PhysicsProcess → InputStateMachine.Tick（仲裁路由）
 
 > **架构 → 实现 → 回溯 → 再规划**
 
-当前处于 **Phase 1 实现期**（Phase 0 已于 2026-08-15 完成回溯）。本文档已定义模块边界、职责划分和各阶段开发任务明细，并随实现进展修订。
+当前处于 **Phase 2 实现期**（Phase 0 于 2026-08-15、Phase 1 于 2026-09-12 完成回溯；Phase 2 · S2 直球敌人端到端已打通，下一步 S3 反推确反 roster）。本文档已定义模块边界、职责划分和各阶段开发任务明细，并随实现进展修订。
 
 **待定内容（需在开发中逐步填充）：**
 - 连招种类与搓招表（Phase 1完成后设计）

@@ -56,6 +56,10 @@ public partial class InputStateMachine : Node
 		{
 			return false;
 		}
+		if (currentInputReceiver == combatHandler && !combatHandler.CurrentMoveDodgeCancellable)
+		{
+			return false;
+		}
 		if (player.dodgeCooldown > 0)
 		{
 			return false;

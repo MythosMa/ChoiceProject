@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MoveData" format=3 uid="uid://c2fe6bct17im5"]
+
+[ext_resource type="Script" uid="uid://duwjwvk4spb8q" path="res://scripts/data/MoveData.cs" id="1_8sgyf"]
+
+[resource]
+script = ExtResource("1_8sgyf")
+moveName = "enemy_punish"
+startupFrames = 6
+recoveryFrames = 14
+hitstopFrames = 8
+shakeMagnitude = 10.0
+hitboxOffset = Vector2(70, 0)
+hitboxSize = Vector2(140, 24)
+metadata/_custom_type_script = "uid://duwjwvk4spb8q"
