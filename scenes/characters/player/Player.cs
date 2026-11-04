@@ -111,7 +111,8 @@ public partial class Player : CharacterBody2D, IDamageable
 		}
 		_hp = Mathf.Max(0, _hp - damageAmount);
 		_hitstunRequested = true;
-		GD.Print($"被攻击： -{damageAmount}, HP: {_hp} / {maxHP}");
+		string from = move != null ? move.displayName : "?";
+		GD.Print($"被攻击（{from}）： -{damageAmount}, HP: {_hp} / {maxHP}");
 		if (_hp <= 0)
 		{
 			GD.Print("Game Over!");

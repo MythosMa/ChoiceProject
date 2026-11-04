@@ -63,7 +63,7 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         string moveId = move != null ? move.Id : "Unknown";
         if (enemyStateMachine.IsArmoredAgainst(moveId))
         {
-            PunishRead(moveId);
+            PunishRead(move);
             return false;
         }
         EnemyStateMachine.Phase phase = enemyStateMachine.CurrentPhase;
@@ -88,8 +88,9 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         }
 
         _hp = Mathf.Max(0, _hp - finalDamage);
-        GD.Print($"{tag}，敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");   // 先报伤害，再报识破（因果顺序）
-        enemyStateMachine.RegisterHit(moveId);
+        string moveLabel = move != null ? move.displayName : "?";
+        GD.Print($"{tag}（{moveLabel}），敌人 -{finalDamage}, HP: {_hp}/{_maxHp}");   // 先报伤害，再报识破（因果顺序）
+        enemyStateMachine.RegisterHit(move);
         enemyStateMachine.Interrupt();
 
         if (_hp <= 0)
@@ -103,8 +104,10 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         return true;
     }
 
-    private void PunishRead(string moveId)
+    private void PunishRead(MoveData move)
     {
+        string moveLabel = move != null ? $"{move.displayName}（{move.Id}）" : "Unknown";
+        string moveId = move != null ? move.Id : "Unknown";
         Player player = GetTree().GetFirstNodeInGroup("Player") as Player;
         if (player == null)
         {
@@ -114,7 +117,7 @@ public partial class Enemy01 : CharacterBody2D, IDamageable
         MoveData counter = enemyStateMachine.attackMove;
         int punishDamage = Mathf.RoundToInt(counter.damage * armorPunishMultiplier);
 
-        GD.Print($"[架住] 你的 {moveId} 已被识破，伤害无效，遭到 {punishDamage} 点反击");
+        GD.Print($"[架住] 你的 {moveLabel}已被识破，伤害无效，遭到 {punishDamage} 点反击");
 
         FeedbackSystem.Instance.RequestHitstop(counter.hitstopFrames);
         FeedbackSystem.Instance.RequestShake(counter.hitstopFrames, counter.shakeMagnitude);

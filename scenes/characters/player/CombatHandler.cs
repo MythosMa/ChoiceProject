@@ -130,7 +130,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		if (_prevSegment == Segment.Active && seg == Segment.Recovery && !_hitbox.hasConnected && !_move.dodgeCancellable)
 		{
 			player.WhiffPunishable = true;
-			DebugLog.V($"[挥空] {_move.displayName}挥空，露出破绽~");
+			GD.Print($"[挥空] {_move.displayName}挥空，露出破绽");
 		}
 		_prevSegment = seg;
 

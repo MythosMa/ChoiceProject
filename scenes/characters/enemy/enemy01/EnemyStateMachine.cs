@@ -34,6 +34,7 @@ public partial class EnemyStateMachine : Node
     public int greedWindowFrames = 120; // 预研ai, 未被同一招打中持续时长后，放弃预判
 
     private string _lastMoveId;
+    private MoveData _lastMove;
     private int _repeatCount;
     private int _greedTimer;
     private string _predictedMoveId; // 反制针对的招式i
@@ -147,8 +148,9 @@ public partial class EnemyStateMachine : Node
         return match && armoredPhase;
     }
 
-    public void RegisterHit(string moveId)
+    public void RegisterHit(MoveData move)
     {
+        string moveId = move != null ? move.Id : "Unknown";
         if (moveId == _lastMoveId)
         {
             _repeatCount++;
@@ -158,6 +160,7 @@ public partial class EnemyStateMachine : Node
             _lastMoveId = moveId;
             _repeatCount = 1;
         }
+        _lastMove = move;
 
         _greedTimer = greedWindowFrames;
     }
@@ -177,7 +180,8 @@ public partial class EnemyStateMachine : Node
         {
             _predictedMoveId = _lastMoveId;
             _repeatCount = 0;
-            GD.Print($"[识破] 敌人预判了你的 {_predictedMoveId} —— 再打同一招会被架住并反击");
+            string display = _lastMove != null ? _lastMove.displayName : _predictedMoveId;
+            GD.Print($"[识破] 敌人预判了你的 {display}（{_predictedMoveId}）—— 再打同一招会被架住并反击");
             EnterPhase(Phase.Startup);
             return;
         }
