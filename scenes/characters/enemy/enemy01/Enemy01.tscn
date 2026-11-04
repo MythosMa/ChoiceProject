@@ -21,6 +21,7 @@ size = Vector2(32, 32)
 collision_layer = 32
 collision_mask = 1
 script = ExtResource("1_a7k2l")
+maxHP = 240
 enemyStateMachine = NodePath("EnemyStateMachine")
 attackHitbox = NodePath("Hitbox")
 

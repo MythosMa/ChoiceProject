@@ -320,7 +320,9 @@ public partial class TestRunner : Node
             await Frames(21);
         }
 
-        Check(enemy.HP == enemy.maxHP - 12, $"第 3 下没有被架住（敌人 HP={enemy.HP}）");
+        int expectedDamage = LightMoveOf(player).damage * 2;
+        Check(enemy.HP == enemy.maxHP - expectedDamage,
+            $"第 3 下没有被架住（敌人 HP={enemy.HP}，期望 {enemy.maxHP - expectedDamage}）");
 
         player.invincible = true;
         int hpBefore = enemy.HP;
@@ -355,6 +357,7 @@ public partial class TestRunner : Node
 
         int enemyHp0 = enemy.HP;
         int playerHp0 = player.HP;
+        int expectedDamage = LightMoveOf(player).damage * 2; // 前两下命中，第 3 下被架住
 
         for (int i = 0; i < 3; i++)
         {
@@ -366,8 +369,8 @@ public partial class TestRunner : Node
         }
         await Frames(6);
 
-        Check(enemyHp0 - enemy.HP == 12,
-            $"第 3 次同招不该造成伤害：敌人 {enemyHp0} → {enemy.HP}（期望只掉 12）");
+        Check(enemyHp0 - enemy.HP == expectedDamage,
+            $"第 3 次同招不该造成伤害：敌人 {enemyHp0} → {enemy.HP}（期望只掉 {expectedDamage}）");
         Check(player.HP < playerHp0,
             $"被架住后玩家没有吃到反击伤害（玩家 {playerHp0} → {player.HP}）");
 
@@ -422,11 +425,13 @@ public partial class TestRunner : Node
     private async Task TestBaseline()
     {
         int killFrames = await RunScriptAlternating(900);
-        GD.Print($"[INFO] A3 基线（冻结 AI / 玩家无敌）：交替 jab+heavy 击杀 50HP 敌人 = {killFrames} 帧（{killFrames / 60.0:F2} 秒）");
+        GD.Print($"[INFO] A3 基线（冻结 AI / 玩家无敌）：交替 jab+heavy 击杀满血敌人 = {killFrames} 帧（{killFrames / 60.0:F2} 秒）");
         Check(killFrames < 900, "900 帧内没击杀，输出链路可能断了");
+        Check(killFrames >= 150 && killFrames <= 540,
+            $"纯输出击杀 {killFrames} 帧（{killFrames / 60.0:F1}s），超出 [2.5s, 9s] 合理区间——检查 HP 与伤害数值");
 
         int remaining = await RunScriptJabOnly(240);
-        GD.Print($"[INFO] A3 对照（冻结 AI / 玩家无敌）：同名 jab 连打 240 帧后敌人剩余 {remaining}/50 HP");
+        GD.Print($"[INFO] A3 对照（冻结 AI / 玩家无敌）：同名 jab 连打 240 帧后敌人剩余 {remaining} HP");
     }
 
     private async Task<int> RunScriptAlternating(int maxFrames)

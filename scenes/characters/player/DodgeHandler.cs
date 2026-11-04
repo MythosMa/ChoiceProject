@@ -42,7 +42,8 @@ public partial class DodgeHandler : Node, IInputReceiver
     public void Tick(double delta)
     {
         _frame++;
-        player.moveAxis = player.facing;
+        // 冲刺是瞬时速度，绕过移动加减速
+        player.externalVelocityX = player.facing * Player.Speed;
         if (_frame >= dodgeFrames)
         {
             inputStateMachine.TransitionTo(inputStateMachine.movementHandler);

@@ -15,7 +15,7 @@ public partial class Player : CharacterBody2D, IDamageable
 	public int maxEnergy = 100;
 	private int _energy;
 	public int Energy => _energy;
-	public float energyRegenPerSecond = 30f;
+	public float energyRegenPerSecond = 12f;
 	private float _energyAccum;
 
 	public const float Speed = 300.0f;
@@ -24,8 +24,15 @@ public partial class Player : CharacterBody2D, IDamageable
 	public int facing = 1;
 	public float moveAxis;
 
-	/// <summary>招式位移速度（px/s，已按朝向换算）。由 CombatHandler 每帧写入，Player 统一应用。</summary>
-	public float combatVelocityX;
+	/// <summary>外部驱动速度（px/s，已按朝向换算）：招式位移、闪避冲刺都写这里，Player 统一应用。
+	/// 与 moveAxis 分开，是为了"移动有加减速、招式/闪避是瞬时"。</summary>
+	public float externalVelocityX;
+
+	/// <summary>地面加速/减速帧数（从静止到全速 / 从全速到静止）。</summary>
+	[Export]
+	public float groundAccelFrames = 6f;
+	[Export]
+	public float groundDecelFrames = 6f;
 	private bool jumpRequested = false;
 	private bool _hitstunRequested = false;
 	public void RequestJump() => jumpRequested = true;
@@ -71,7 +78,7 @@ public partial class Player : CharacterBody2D, IDamageable
 		}
 		moveAxis = 0;
 		jumpRequested = false;
-		combatVelocityX = 0;
+		externalVelocityX = 0;
 		inputStateMachine.Tick(delta);
 
 		if (moveAxis != 0)
@@ -90,8 +97,12 @@ public partial class Player : CharacterBody2D, IDamageable
 			velocity.Y = JumpVelocity;
 		}
 
-		velocity.X = moveAxis != 0 ? moveAxis * Speed : Mathf.MoveToward(Velocity.X, 0, Speed);
-		velocity.X += combatVelocityX;
+		// 移动带加减速；招式位移 / 闪避冲刺走 externalVelocityX，保持瞬时
+		float targetX = moveAxis * Speed;
+		float smoothingFrames = Mathf.Abs(targetX) > 0.01f ? groundAccelFrames : groundDecelFrames;
+		float rate = Speed / Mathf.Max(1f, smoothingFrames);
+		velocity.X = Mathf.MoveToward(velocity.X, targetX, rate * 60f * (float)delta);
+		velocity.X += externalVelocityX;
 
 		Velocity = velocity;
 		MoveAndSlide();

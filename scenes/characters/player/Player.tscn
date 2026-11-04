@@ -23,6 +23,10 @@ inputStateMachine = NodePath("InputStateMachine")
 [node name="InputStateMachine" parent="." unique_id=1868557808 node_paths=PackedStringArray("player") instance=ExtResource("2_c12fh")]
 player = NodePath("..")
 
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1764261496]
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1837309345]
 shape = SubResource("RectangleShape2D_srvkq")
 
