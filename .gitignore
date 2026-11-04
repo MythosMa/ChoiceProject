@@ -1,3 +1,16 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# OS
+.DS_Store
+
+# IDE / local
+.vs/
+*.csproj.user
+
+# 个人环境脚本（不属于游戏工程）
+/fix_csharp_ext.sh
+
+# 临时截图（doc/images/ 下的基线图是刻意保留的）
+/shot.png

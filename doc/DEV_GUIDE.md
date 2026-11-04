@@ -1,7 +1,8 @@
 # Choice Project - 开发文档（Development Guide）
 
-> 版本：v0.19  |  日期：2026-11-04  |  状态：Phase 2 实现期（S3 第一/二刀 + 取向P/R 验收通过；**新增基线实测：免费解"交替两招"确认，见 §七 S3「第一批止血 + 基线实测」**）
+> 版本：v0.20  |  日期：2026-11-04  |  状态：**M0 基座收口**（新阶段启动；排期与验收门已移交 `ROADMAP.md`）
 >
+> **v0.20 变更（2026-11-04，破坏性）：** ①**开发方式切换**——实现交给 AI，人负责方向与验收，批量交付+断言验收（详见 ROADMAP §一）；②**阶段表移交**——§七 的 Phase 0–4 任务表冻结为历史记录，现行计划改为 ROADMAP 的 M0–M8；③**产品模型收编**——「非对称赌注 + 被读重罚 + 欺骗」从本文件迁入 `GAME_DESIGN` §2.5，产品决策不再住在开发日志里；④**目录结构/文档分工**更新；⑤核心模型定为**短促交锋**（敌人必须有回合）。
 > v0.19 变更：第一批止血（出招朝向 bug、调试日志闸门、失效属性/占位招清理、练习木桩模式、测试场景 HP 复原）＋ headless 基线实测。**实测结论：同名 spam 被识破反击打死、交替两招 3 秒 0 伤通关——两端都是极端值，中间没有梯度。** 下一刀的方向因此从"加机制"改为"给敌人回合"。
 > v0.18 变更：第二刀取向 P **手感验收通过**（用户"有点意思了"）；新增基石② 落地机制 **取向 R**（见 §七 S3「取向R」）——`MoveData.dodgeCancellable` 单字段驱动"承诺招不可闪避取消 + 挥空可被抓"，`EnemyStateMachine.TryStartWhiffPunish` 在 Idle/Recovery 起长距离快反斩。修复反斩污染识破状态的三重 bug（起手清空 `_predictedMoveId`），红线代码推论固化。
 > v0.17 变更：第二刀取向 P 实现（见 §七 S3「第二刀」）——`Hitbox.hasConnected` 判扑空 + `EnemyStateMachine.Phase.Stagger`（青白闪烁/无霸体/不可打断）+ `Enemy01.staggerMultiplier=3`；把高回报独占绑定在"做局骗"行为上。平衡顾虑：一次成功骗≈秒杀，分诊顺序见该段。
@@ -24,7 +25,7 @@
 
 ## 二、项目目录结构
 
-按实体/节点归类，每个单元自成一个文件夹，包含其场景文件（.tscn）、脚本（.cs）和专属资源。以下为当前实际结构（2026-08-15）：
+按实体/节点归类，每个单元自成一个文件夹，包含其场景文件（.tscn）、脚本（.cs）和专属资源。以下为当前实际结构（2026-11-04）：
 
 ```
 choice_project/
@@ -34,28 +35,47 @@ choice_project/
 ├── icon.svg
 │
 ├── core/                             # 全局 Autoload 系统
-│   └── InputManager.cs               # 输入采集：位掩码快照 + 输入缓冲（纯记录，不仲裁）
+│   ├── InputManager.cs               # 输入采集：位掩码快照 + 输入缓冲（纯记录，不仲裁）
+│   └── FeedbackSystem.cs             # 顿帧（单计数器）+ 震屏
 │
 ├── scenes/                           # 按实体归类，.tscn 与 .cs 放一起
 │   ├── characters/
-│   │   └── player/
-│   │       ├── Player.tscn/.cs               # CharacterBody2D：物理积分、意图接口
-│   │       ├── InputStateMachine.tscn/.cs    # 输入仲裁/路由：全局触发器、状态切换
-│   │       ├── MovementHandler.tscn/.cs      # 移动状态处理器
-│   │       ├── DodgeHandler.tscn/.cs         # 闪避状态处理器（位移/无敌帧的未来承载点）
-│   │       └── CombatHandler.tscn/.cs        # 战斗状态处理器（择窗口、招式路由）
+│   │   ├── player/
+│   │   │   ├── Player.tscn/.cs               # CharacterBody2D：物理积分、HP/气、意图接口
+│   │   │   ├── InputStateMachine.tscn/.cs    # 输入仲裁/路由：全局触发器、状态切换
+│   │   │   ├── MovementHandler.tscn/.cs      # 移动状态处理器
+│   │   │   ├── DodgeHandler.tscn/.cs         # 闪避（全程无敌 + 冷却）
+│   │   │   ├── HitstunHandler.tscn/.cs       # 受击硬直
+│   │   │   └── CombatHandler.tscn/.cs        # 招式播放、方向路由、连段、挥空判定
+│   │   └── enemy/
+│   │       ├── enemy01/                      # Enemy01 + EnemyStateMachine + 招式 .tres
+│   │       └── training_dummy/               # 训练假人（IDamageable）
+│   ├── combat/
+│   │   ├── components/                       # Hitbox / Hurtbox / IDamageable
+│   │   └── effects/                          # HitSpark
 │   ├── ui/
-│   │   └── input_test/               # 输入调试 UI（InputScreen + InputInfo）
-│   └── test_scenes/                  # 测试场景（test_scene_move 等）
+│   │   ├── hud/                              # HP / 气
+│   │   └── input_test/                       # 输入历史面板
+│   └── test_scenes/                          # 测试场景（当前 main scene 在此）
 │
 ├── scripts/                          # 纯逻辑/数据，不依赖场景节点
-│   ├── data/                         # 输入数据类型（InputButtons/Direction/AttackType/InputRecord）
-│   └── tools/                        # 静态工具函数（Tools.cs）
+│   ├── data/                         # InputButtons/Direction/AttackType/InputRecord/MoveData
+│   └── tools/                        # Tools.cs（方向/按键映射）、DebugLog.cs（日志闸门）
+│
+├── resources/move/                   # 招式 .tres（帧数据/伤害/判定框，调参都在这里）
 │
 ├── assets/                           # 共享素材
 │   └── textures/white.png            # 唯一占位纹理（色块 = 白纹理 + Scale + Modulate）
 │
-└── doc/                              # 项目文档（GAME_DESIGN / DEV_GUIDE / PROJECT_DESIGN）
+├── tests/                            # headless 机制断言（M0 建立）
+│
+└── doc/                              # 项目文档
+    ├── ROADMAP.md                    # 现行计划：M0–M8、退出条件、协作协议
+    ├── GAME_DESIGN.md                # 产品与玩法设计
+    ├── DEV_GUIDE.md                  # 本文件：技术架构与实现约定
+    ├── BACKLOG.md                    # 待办池
+    ├── images/                       # 基线截图
+    └── archive/                      # 历史决策存档（不再是现行依据）
 ```
 
 **目录原则：**
@@ -63,7 +83,8 @@ choice_project/
 - 需要注册为 Autoload 的全局系统放 core/
 - 不属于任何场景的纯数据结构和静态工具放 scripts/
 - 测试场景放 scenes/test_scenes/，正式关卡后续单设
-- 配置参数（.tres）随使用方模块存放；全局手感/数值配置届时在 core/config/ 下集中（Phase 1 引入）
+- 配置参数（.tres）随使用方模块存放；全局手感/数值配置在需要时进 core/config/（**至今未建，属 BACKLOG**）
+- **文档分工（2026-11-04 起）**：排期与验收归 `ROADMAP.md`、产品决策归 `GAME_DESIGN.md`、技术与教训归本文件、暂缓项归 `BACKLOG.md`、历史进 `doc/archive/`
 
 ---
 
@@ -331,9 +352,15 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
 
 ---
 
-## 七、开发阶段与任务明细
+## 七、开发阶段与任务明细（**已于 2026-11-04 冻结**）
 
-> 排期留空，各阶段完成后再规划下一阶段的具体时间安排。
+> ⚠️ **本节是"手搓时代"的历史记录，已由 [`ROADMAP.md`](ROADMAP.md)（M0–M8）取代。**
+>
+> 保留它的理由：里面沉淀了回溯记录、踩坑与教训（尤其 Phase 0/1/2 的"已修复"块），这些是耐久的。
+> **不再保留的部分**：任务表式的排期、"先框架后敌人"的字面顺序、"3–6 个月 Demo"这类时间假设。
+>
+> 现行规则：**排期、退出条件、协作协议一律以 ROADMAP 为准**；本节只作为"我们是怎么走到今天的"。
+> 其中 Phase 0–4 的复选框状态**不再维护**。
 
 ---
 
@@ -746,19 +773,22 @@ S2 打通后稳定下来的战斗层结构，新接手必读。核心原则：**
 
 ## 八、开发节奏
 
-> **架构 → 实现 → 回溯 → 再规划**
+> **方向 → 实现 → 验证 → 回溯**（2026-11-04 起）
 
-当前处于 **Phase 2 实现期**（Phase 0 于 2026-08-15、Phase 1 于 2026-09-12 完成回溯；Phase 2 · S2 直球敌人端到端已打通，下一步 S3 反推确反 roster）。本文档已定义模块边界、职责划分和各阶段开发任务明细，并随实现进展修订。
+当前处于 **M0 基座收口**。计划、退出条件、协作协议见 [`ROADMAP.md`](ROADMAP.md)。
 
-**待定内容（需在开发中逐步填充）：**
-- 连招种类与搓招表（Phase 1完成后设计）
-- 各招式帧数据
-- 具体排期（各Phase完成后规划下一阶段）
+**节奏规则（技术侧执行细则）：**
 
-每个Phase实现完毕后，回溯更新：
-1. 产品设计文档（GAME_DESIGN.md）：验证设计假设是否成立，调整或推翻
-2. 本文档（DEV_GUIDE.md）：记录实际实现中的架构调整、新增发现
-3. 规划下一Phase的具体时间排期
+1. **一批一个 commit**，diff 控制在 ~300 行内，commit 标题写清"该验什么"；
+2. 每批必须同时有 **L1（headless 断言）** 与 **L2（人打三分钟的结论）**，缺一不算完成；
+3. 改完必须 `dotnet build` + 实际跑一遍 + 截图，**"编译通过"不等于"改对了"**；
+4. 手感改坏了**回滚一个 commit**，不做局部缝补；
+5. 想到但不在本批次范围内的事，写进 [`BACKLOG.md`](BACKLOG.md)，不顺手做。
+
+**每批结束回溯三件事：**
+1. 设计假设是否被推翻 → 更新 `GAME_DESIGN.md`；
+2. 架构是否出现新的重复/耦合 → 更新本文件（并判断是否到了 BACKLOG #4/#5 的重构时机）；
+3. 数值与教训 → 记入本文件对应章节与变更日志。
 
 ---
 
