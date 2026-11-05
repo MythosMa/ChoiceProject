@@ -50,8 +50,8 @@
 |------|------|------|------|------|
 | M0 | 基座收口 | `stage/m0` | ✅ 已验收（`m0-accepted`） | [M0.md](M0.md) |
 | M1 | 回合 | `stage/m1` | ✅ 已验收（`m1-accepted`） | [M1.md](M1.md) |
-| M2 | 三个问题 | `stage/m2` | 🔨 进行中 | [M2.md](M2.md) |
-| M3 | 外部验证 | `stage/m3` | ⏳ 未开始 | — |
+| M2 | 三个问题 | `stage/m2` | ✅ 已验收（`m2-accepted`） | [M2.md](M2.md) |
+| M3 | 外部验证 | `stage/m3` | 🔨 进行中 | [M3.md](M3.md) |
 | M4 | 第二敌人 | `stage/m4` | ⏳ 未开始 | — |
 | M5 | Boss | `stage/m5` | ⏳ 未开始 | — |
 | M6 | 容器 | `stage/m6` | ⏳ 未开始 | — |
