@@ -45,6 +45,10 @@ public partial class MoveData : Resource
     [Export]
     public Vector2 hitboxSize = Vector2.Zero; // Hitbox 大小
 
+    /// <summary>破防：命中格挡时直接打破格挡（无视减伤 + 大硬直）。</summary>
+    [Export]
+    public bool guardBreak = false;
+
     [ExportGroup("出招位移（相对朝向，像素）")]
     /// <summary>起手段位移：负数=向后拉（蓄力感）。总位移按段帧数均摊。</summary>
     [Export]

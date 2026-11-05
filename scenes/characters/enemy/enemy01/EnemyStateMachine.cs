@@ -27,6 +27,19 @@ public partial class EnemyStateMachine : Node
     [Export]
     public MoveData counterMove;
 
+    /// <summary>第二招：破防快招。让敌人有两张牌，玩家要"读哪一张"。</summary>
+    [Export]
+    public MoveData secondaryAttack;
+
+    /// <summary>近距离时选择第二招的概率（0~1）。</summary>
+    [Export]
+    public float secondaryChanceClose = 0.45f;
+    [Export]
+    public float secondaryChanceFar = 0.15f;
+    /// <summary>低于这个距离算"近"。</summary>
+    [Export]
+    public float closeRange = 120f;
+
     /// <summary>压力每掉 1 格需要的秒数。</summary>
     [Export]
     public float pressureDecaySeconds = 1.0f;
@@ -58,6 +71,13 @@ public partial class EnemyStateMachine : Node
 
     /// <summary>当前霸体是否来自"解围"（全体霸体），而不是"识破某招"。</summary>
     public bool IsBurstArmor => _burstArmor;
+
+    /// <summary>进入踉跄的次数（断言用）。</summary>
+    public int StaggerCount { get; private set; }
+
+    /// <summary>两招各自用了多少次（断言 A18 用）。</summary>
+    public int PrimaryUsed { get; private set; }
+    public int SecondaryUsed { get; private set; }
     private int _repeatCount;
     private int _greedTimer;
     private string _predictedMoveId; // 反制针对的招式i
@@ -126,6 +146,15 @@ public partial class EnemyStateMachine : Node
             case Phase.Idle:
                 if (_frame >= _idleDuration)
                 {
+                    _nextAttack = PickAttack();
+                    if (_nextAttack == secondaryAttack)
+                    {
+                        SecondaryUsed++;
+                    }
+                    else if (_nextAttack == attackMove)
+                    {
+                        PrimaryUsed++;
+                    }
                     EnterPhase(Phase.Startup);
                 }
                 break;
@@ -138,7 +167,14 @@ public partial class EnemyStateMachine : Node
             case Phase.Active:
                 if (_frame >= _currentMove.activeFrames)
                 {
-                    if (_predictedMoveId != null && !_enemy.attackHitbox.hasConnected)
+                    // 踉跄只发生在"**承诺招**打空"时，而不是任何攻击打空：
+                    //   - 识破后的反击（你重复用招骗它出来，再躲掉）
+                    //   - 压力满后的解围（你压满压力，再躲掉）
+                    // 普通直拳打空不算——否则玩家一直躲就能无限刷 ×3（实测 7 连）。
+                    // 收成"只有反击"又会太罕见（玩家交替用招就永远见不到）——所以两条都算。
+                    bool isCommitmentMove = (counterMove != null && _currentMove == counterMove)
+                        || (burstMove != null && _currentMove == burstMove);
+                    if (isCommitmentMove && !_enemy.attackHitbox.hasConnected)
                     {
                         EnterPhase(Phase.Stagger);
                     }
@@ -173,13 +209,18 @@ public partial class EnemyStateMachine : Node
 
     public bool IsArmoredAgainst(string moveId)
     {
-        // 解围是"全体霸体"（不看招名）；识破是"针对某招"（看招名）。
-        bool armoredPhase = _phase == Phase.Startup
-            || _phase == Phase.Active
-            || _phase == Phase.Recovery;
-        bool match = _burstArmor || (_predictedMoveId != null && _predictedMoveId == moveId);
-        DebugLog.V($"[霸体检查] 来招={moveId} 预判={_predictedMoveId ?? "无"} 解围={_burstArmor} 阶段={_phase} 匹配={match} 霸体段={armoredPhase}");
-        return match && armoredPhase;
+        // 解围 = 全体霸体（看阶段）；识破 = 针对某招（看招名，**任何动作阶段都成立**）。
+        if (_phase == Phase.Stagger || _phase == Phase.Hitstun)
+        {
+            return false;
+        }
+
+        bool byPrediction = _predictedMoveId != null && _predictedMoveId == moveId;
+        bool byBurst = _burstArmor
+            && (_phase == Phase.Startup || _phase == Phase.Active || _phase == Phase.Recovery);
+        bool match = byPrediction || byBurst;
+        DebugLog.V($"[霸体检查] 来招={moveId} 预判={_predictedMoveId ?? "无"} 解围={_burstArmor} 阶段={_phase} 匹配={match}");
+        return match;
     }
 
     public void RegisterHit(MoveData move)
@@ -309,12 +350,15 @@ public partial class EnemyStateMachine : Node
         }
         else if (next == Phase.Stagger)
         {
+            StaggerCount++;
             FeedbackSystem.Instance.RequestShake(8, 6f);
             GD.Print("敌人扑空踉跄！大破绽，快确反×3！");
         }
         else if (next == Phase.Idle)
         {
-            _predictedMoveId = null;
+            // 预判**不在待机时清除**：否则"被识破"只在它出招的三段里成立，
+            // 玩家只要等它收招再打，就白嫖了（实测重拳 spam 就是这么赢的）。
+            // 过期交给 greedWindowFrames。
             _burstArmor = false;
             _idleDuration = GD.RandRange(idleFramesMin, idleFramesMax);
         }
@@ -391,6 +435,22 @@ public partial class EnemyStateMachine : Node
         _enemy.externalVelocityX = shift / frames * 60f * toward;
     }
 
+    /// <summary>
+    /// 两招之间选择：近距离时更容易出破防快招，远距离偏向直拳。
+    /// 关键是**不能有固定顺序**，否则玩家会背"下一招是什么"。
+    /// </summary>
+    private MoveData PickAttack()
+    {
+        if (secondaryAttack == null || _player == null)
+        {
+            return attackMove;
+        }
+
+        float dist = Mathf.Abs(_player.GlobalPosition.X - _enemy.GlobalPosition.X);
+        float chance = dist <= closeRange ? secondaryChanceClose : secondaryChanceFar;
+        return GD.Randf() < chance ? secondaryAttack : attackMove;
+    }
+
     /// <summary>待机时如果离玩家太远，就慢慢走近——避免玩家躲在射程外等它出招。</summary>
     private void TryApproach()
     {
@@ -448,7 +508,13 @@ public partial class EnemyStateMachine : Node
         switch (_phase)
         {
             case Phase.Startup:
-                _enemy.attackHitbox.ShowThreat(new Color(1.0f, 0.85f, 0.0f, 0.35f));
+            {
+                // 威胁框用**招式自己的颜色**：两招一眼可分（直拳黄 / 破防品红），
+                // 而且形状也不同（110×24 细长 vs 70×50 粗短）。
+                Color accent = _currentMove != null ? _currentMove.accentColor : new Color(1.0f, 0.85f, 0.0f);
+                _enemy.attackHitbox.ShowThreat(new Color(accent.R, accent.G, accent.B, 0.35f));
+                break;
+            }
                 break;
             case Phase.Active:
                 _enemy.attackHitbox.ShowThreat(new Color(1.0f, 0.1f, 0.1f, 0.6f));

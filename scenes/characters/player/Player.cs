@@ -53,7 +53,11 @@ public partial class Player : CharacterBody2D, IDamageable
 
 	public override void _PhysicsProcess(double delta)
 	{
-		_energyAccum += (float)delta * energyRegenPerSecond;
+		// 格挡期间不回复气——否则"耗气"会被回复抵消，格挡就没有代价了
+		if (!blocking)
+		{
+			_energyAccum += (float)delta * energyRegenPerSecond;
+		}
 		int gained = Mathf.FloorToInt(_energyAccum);
 		if (gained > 0)
 		{
@@ -114,6 +118,12 @@ public partial class Player : CharacterBody2D, IDamageable
 		MoveAndSlide();
 	}
 
+	/// <summary>是否处于格挡态（由 BlockHandler 维护）。</summary>
+	public bool blocking;
+
+	/// <summary>被破防的硬直帧数（0 = 普通受击）。</summary>
+	public int pendingStunFrames;
+
 	public bool TrySpendEnergy(int energyCost)
 	{
 		if (_energy < energyCost)
@@ -131,10 +141,36 @@ public partial class Player : CharacterBody2D, IDamageable
 			DebugLog.V($"无敌状态，无法受到伤害 {damageAmount}");
 			return false;
 		}
+
+		string tag = "被攻击";
+		bool guardBroken = false;
+
+		if (blocking && move != null)
+		{
+			if (move.guardBreak)
+			{
+				// 破防：无视减伤，全额伤害 + 长硬直
+				guardBroken = true;
+				pendingStunFrames = 40;
+				blocking = false;
+				tag = "破防命中";
+			}
+			else
+			{
+				// 普通格挡：只吃削血，不进硬直
+				damageAmount = Mathf.Max(1, Mathf.RoundToInt(damageAmount * 0.2f));
+				tag = "格挡";
+			}
+		}
+
 		_hp = Mathf.Max(0, _hp - damageAmount);
-		_hitstunRequested = true;
+		if (!blocking)
+		{
+			_hitstunRequested = true;
+		}
 		string from = move != null ? move.displayName : "?";
-		GD.Print($"被攻击（{from}）： -{damageAmount}, HP: {_hp} / {maxHP}");
+		GD.Print($"{tag}（{from}）： -{damageAmount}, HP: {_hp} / {maxHP}");
+		_ = guardBroken;
 		if (_hp <= 0)
 		{
 			GD.Print("Game Over!");

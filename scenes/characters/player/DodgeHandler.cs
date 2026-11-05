@@ -12,6 +12,8 @@ public partial class DodgeHandler : Node, IInputReceiver
     public int cooldownFrames = 60;
 
     private int _frame;
+    /// <summary>这次闪避的方向：取**按下瞬间的输入方向**，不取上次朝向。</summary>
+    private int _dir;
     private uint _savedMask;
     private uint _savedLayer;
 
@@ -27,6 +29,23 @@ public partial class DodgeHandler : Node, IInputReceiver
     public void Enter()
     {
         _frame = 0;
+
+        // 方向以"按下闪避时正在按的方向"为准。
+        // 用 player.facing 会在"先转身后闪避"的同一帧里取到旧朝向（实测会反向冲）。
+        InputButtons current = InputManager.Instance.Current;
+        if ((current & InputButtons.Left) != InputButtons.None)
+        {
+            _dir = -1;
+        }
+        else if ((current & InputButtons.Right) != InputButtons.None)
+        {
+            _dir = 1;
+        }
+        else
+        {
+            _dir = player.facing;
+        }
+        player.facing = _dir;
         player.invincible = true;
         player.dodgeCooldown = cooldownFrames;
 
@@ -52,7 +71,7 @@ public partial class DodgeHandler : Node, IInputReceiver
     {
         _frame++;
         // 冲刺是瞬时速度，绕过移动加减速
-        player.externalVelocityX = player.facing * dodgeSpeed;
+        player.externalVelocityX = _dir * dodgeSpeed;
         if (_frame >= dodgeFrames)
         {
             inputStateMachine.TransitionTo(inputStateMachine.movementHandler);

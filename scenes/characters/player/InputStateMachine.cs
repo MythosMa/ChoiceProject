@@ -26,6 +26,9 @@ public partial class InputStateMachine : Node
 	[Export]
 	public HitstunHandler hitstunHandler;
 
+	[Export]
+	public BlockHandler blockHandler;
+
 	private IInputReceiver currentInputReceiver;
 
 
@@ -36,6 +39,7 @@ public partial class InputStateMachine : Node
 		combatHandler.Initialize(player, this);
 		dodgeHandler.Initialize(player, this);
 		hitstunHandler.Initialize(player, this);
+		blockHandler.Initialize(player, this);
 
 		TransitionTo(movementHandler);
 	}
@@ -73,6 +77,13 @@ public partial class InputStateMachine : Node
 		TransitionTo(hitstunHandler);
 	}
 
+	/// <summary>破防硬直：进入指定帧数的硬直。</summary>
+	public void ForceGuardBreak(int frames)
+	{
+		hitstunHandler.SetDuration(frames);
+		TransitionTo(hitstunHandler);
+	}
+
 
 	public void Tick(double delta)
 	{
@@ -87,6 +98,15 @@ public partial class InputStateMachine : Node
 		if (currentInputReceiver == movementHandler && (buttons & InputButtons.AttackMask) != InputButtons.None)
 		{
 			TransitionTo(combatHandler);
+			return;
+		}
+
+		// 格挡：按住进入、松开退出（只在移动态可进入）。
+		// 注意用"是否按住"而不是"按下边缘"——否则在硬直中按下的那一下会被吞掉，
+		// 之后一直按着也进不去（实测出现过）。
+		if (currentInputReceiver == movementHandler && (input.Current & InputButtons.Block) != InputButtons.None)
+		{
+			TransitionTo(blockHandler);
 			return;
 		}
 

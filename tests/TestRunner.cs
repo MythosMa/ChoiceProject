@@ -39,6 +39,15 @@ public partial class TestRunner : Node
         await RunSafe("A10 一次压力周期只触发一次解围", TestSingleBurstPerCycle);
         await RunSafe("A12 识破后的反击能打到重拳最远射程", TestReadCounterReachesHeavyRange);
         await RunSafe("A13 被架住的反伤随招式重量放大", TestPunishScalesWithMoveWeight);
+        await RunSafe("A14 敌人两招可区分", TestTwoMovesDistinguishable);
+        await RunSafe("A15 格挡减伤且不进硬直", TestBlockReducesDamage);
+        await RunSafe("A16 格挡持续耗气，气空自动破防", TestBlockDrainsEnergy);
+        await RunSafe("A17 破防招能打破格挡", TestGuardBreakBreaksBlock);
+        await RunSafe("A18 一局内两招都要出", TestBothMovesUsed);
+        await RunSafe("A19 硬直中按下格挡，硬直结束后能接上", TestBlockHeldThroughHitstun);
+        await RunSafe("A20 无脑连打不能赢（设计目标）", TestMashCannotWin);
+        await RunSafe("A21 闪避方向听当前输入，不听旧朝向", TestDodgeFollowsInput);
+        await RunSafe("A22 躲掉承诺招能让敌人踉跄（大确反入口）", TestBaitCausesStagger);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -270,6 +279,347 @@ public partial class TestRunner : Node
         return loss;
     }
 
+
+    /// <summary>
+    /// A22：**大确反（踉跄 ×3）的入口必须存在**——
+    /// 重复用招逼出识破反击，再把它躲掉，敌人应该扑空踉跄。
+    /// 这条防的是"把踉跄收得太严，玩家永远见不到 ×3"。
+    /// </summary>
+    private async Task TestBaitCausesStagger()
+    {
+        // 延迟从"第二记重拳按下"起算：重拳 12 帧前摇命中→识破武装→反击 14 帧前摇，
+        // 所以反击的判定期大约在按下后 26–30 帧，闪避（12 帧无敌）要在 18–22 帧按下才能盖住。
+        // 用 jab（可闪避取消）：命中约在按下后 6 帧，jab 全部 20 帧，之后才能闪避；
+        // 反击 14 帧前摇 → 判定期约在按下后 20–24 帧，所以闪避要卡在 jab 结束的瞬间。
+        int[] delays = { 18, 20, 22, 24, 26 };
+        int totalStaggers = 0;
+
+        foreach (int delay in delays)
+        {
+            Node2D fixture = await SpawnFixture();
+            Player player = fixture.GetNode<Player>("Player");
+            player.invincible = false;
+            Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+            EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            await Frames(2);
+
+            // 第一记轻拳（命中一次）
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+            await Frames(30);
+
+            // 第二记轻拳 → 命中瞬间识破武装、敌人立刻起反击
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+
+            // 在反击判定期之前闪避
+            await Frames(delay);
+            Input.ActionPress("dodge");
+            await Frames(1);
+            Input.ActionRelease("dodge");
+            await Frames(60);
+
+            totalStaggers += esm.StaggerCount;
+            fixture.QueueFree();
+            await Frames(1);
+        }
+
+        GD.Print($"[INFO] A22 五种闪避时机下，敌人踉跄次数合计 {totalStaggers}");
+        Check(totalStaggers > 0, "躲掉识破反击没能让敌人踉跄 —— 大确反（×3）的入口断了");
+    }
+
+    /// <summary>
+    /// A21：闪避方向必须取"按下瞬间的输入方向"，不能取上次朝向。
+    /// 实测 bug：按住左、朝向还停在右，闪避会向右侧冲。
+    /// </summary>
+    private async Task TestDodgeFollowsInput()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        player.invincible = true;
+
+        // 先朝右走，把朝向变成 +1
+        Input.ActionPress("right");
+        await Frames(10);
+        Input.ActionRelease("right");
+        await Frames(10);
+        Check(player.facing == 1, $"朝向没转右（facing={player.facing}）");
+
+        // 按住左 + 闪避 → 必须向左
+        Input.ActionPress("left");
+        await Frames(2);
+        float x0 = player.GlobalPosition.X;
+        Input.ActionPress("dodge");
+        await Frames(1);
+        Input.ActionRelease("dodge");
+        await Frames(16);
+        Input.ActionRelease("left");
+        float leftDelta = player.GlobalPosition.X - x0;
+
+        await Frames(70); // 冷却
+
+        // 反过来：朝左后按住右 + 闪避 → 必须向右
+        Input.ActionPress("left");
+        await Frames(10);
+        Input.ActionRelease("left");
+        await Frames(10);
+        Input.ActionPress("right");
+        await Frames(2);
+        float x1 = player.GlobalPosition.X;
+        Input.ActionPress("dodge");
+        await Frames(1);
+        Input.ActionRelease("dodge");
+        await Frames(16);
+        Input.ActionRelease("right");
+        float rightDelta = player.GlobalPosition.X - x1;
+
+        GD.Print($"[INFO] A21 按住左闪避 {leftDelta:F1}px，按住右闪避 {rightDelta:F1}px");
+        Check(leftDelta < -60, $"按住左闪避却没向左（{leftDelta:F1}px）");
+        Check(rightDelta > 60, $"按住右闪避却没向右（{rightDelta:F1}px）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>
+    /// A20【设计目标断言】：只按 jab、不闪不挡，**不能赢**。
+    /// 之前的问题是"靠血量淹死敌人"——这条把"能不能淹死"变成可测的数字。
+    /// 如果这条是绿的，说明玩家必须做点什么（闪/挡/换招）才能赢。
+    /// </summary>
+    private async Task TestMashCannotWin()
+    {
+        (int pHp, int eHp, int frames) jab = await RunMasher("jab");
+        (int pHp, int eHp, int frames) alt = await RunMasher("alternate");
+        (int pHp, int eHp, int frames) heavy = await RunMasher("heavy");
+
+        GD.Print($"[INFO] A20 单招 jab：玩家 {jab.pHp} / 敌人 {jab.eHp}（{jab.frames} 帧）");
+        GD.Print($"[INFO] A20 交替 jab/重拳：玩家 {alt.pHp} / 敌人 {alt.eHp}（{alt.frames} 帧）");
+        GD.Print($"[INFO] A20 重拳为主：玩家 {heavy.pHp} / 敌人 {heavy.eHp}（{heavy.frames} 帧）");
+
+        Check(jab.eHp > 0, $"单招 jab 连打能赢（玩家剩 {jab.pHp}）");
+        Check(alt.eHp > 0, $"交替 jab/重拳 连打能赢（玩家剩 {alt.pHp}）—— 免费解仍在");
+        Check(heavy.eHp > 0, $"重拳为主 连打能赢（玩家剩 {heavy.pHp}）");
+    }
+
+    /// <summary>三种"无脑打法"脚本：只攻击，不闪不挡。</summary>
+    private async Task<(int pHp, int eHp, int frames)> RunMasher(string pattern)
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+        await Frames(2);
+
+        int frames = 0;
+        int step = 0;
+        while (frames < 2400 && player.HP > 0 && enemy.HP > 0)
+        {
+            bool fire = false;
+            string action = "light_punch";
+
+            if (pattern == "jab")
+            {
+                fire = frames % 20 == 0;
+            }
+            else if (pattern == "alternate")
+            {
+                fire = frames % 20 == 0;
+                action = (step++ % 2 == 0) ? "light_punch" : "heavy_punch";
+                if (action == "heavy_punch" && player.Energy < 25)
+                {
+                    action = "light_punch";
+                }
+            }
+            else // heavy
+            {
+                fire = frames % 34 == 0;
+                action = player.Energy >= 25 ? "heavy_punch" : "light_punch";
+            }
+
+            if (fire)
+            {
+                Input.ActionPress(action);
+                await Frames(1);
+                Input.ActionRelease(action);
+            }
+
+            await Frames(1);
+            frames++;
+        }
+
+        Input.ActionRelease("light_punch");
+        Input.ActionRelease("heavy_punch");
+        int pHp = player.HP;
+        int eHp = enemy.HP;
+
+        fixture.QueueFree();
+        await Frames(1);
+        return (pHp, eHp, frames);
+    }
+
+    /// <summary>
+    /// A19：格挡是"按住"式——在硬直中按下并保持，硬直结束后必须能接上格挡。
+    /// 这条防的是"按下边缘被吞掉，之后一直按着也进不去"（实测踩过）。
+    /// </summary>
+    private async Task TestBlockHeldThroughHitstun()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        // 先制造一次硬直（不格挡）
+        player.TakeDamage(esm.attackMove.damage, esm.attackMove);
+        await Frames(2);
+
+        // 硬直中按下格挡并一直按住
+        Input.ActionPress("block");
+        await Frames(6);
+        Check(!player.blocking, "硬直中不应该立刻进入格挡");
+
+        await Frames(30); // 等硬直结束
+
+        Check(player.blocking, "硬直结束后没能接上格挡（按住式格挡失效）");
+
+        Input.ActionRelease("block");
+        await Frames(2);
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A14：两招必须可区分——不同 moveId、不同颜色、不同帧数。</summary>
+    private async Task TestTwoMovesDistinguishable()
+    {
+        Node2D fixture = await SpawnFixture();
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData primary = esm.attackMove;
+        MoveData secondary = esm.secondaryAttack;
+
+        Check(primary != null && secondary != null, "第二招没配");
+        Check(primary.moveId != secondary.moveId, "两招 moveId 相同");
+        Check(primary.accentColor != secondary.accentColor, "两招颜色相同，玩家分不出来");
+        Check(primary.startupFrames != secondary.startupFrames,
+            $"两招前摇相同（{primary.startupFrames}），节奏上也没区别");
+        Check(secondary.guardBreak, "第二招没有破防标记");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A15：格挡吃到的伤害必须显著降低，且不进硬直。</summary>
+    private async Task TestBlockReducesDamage()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData normal = esm.attackMove;
+        int raw = normal.damage;
+
+        int hp0 = player.HP;
+        player.blocking = true;
+        player.TakeDamage(raw, normal);
+        int blockedLoss = hp0 - player.HP;
+
+        int hp1 = player.HP;
+        player.blocking = false;
+        player.TakeDamage(raw, normal);
+        int openLoss = hp1 - player.HP;
+
+        GD.Print($"[INFO] A15 格挡吃 {blockedLoss}，裸吃 {openLoss}（原伤害 {raw}）");
+        Check(blockedLoss <= Mathf.CeilToInt(raw * 0.15f),
+            $"格挡没减伤（吃 {blockedLoss} / 原 {raw}）");
+        Check(openLoss == raw, $"裸吃伤害不对（{openLoss} / {raw}）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A16：一直按着格挡，气会被烧空并自动破防。</summary>
+    private async Task TestBlockDrainsEnergy()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        player.invincible = true;
+
+        int e0 = player.Energy;
+        Input.ActionPress("block");
+
+        bool broke = false;
+        for (int i = 0; i < 600; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            if (player.Energy <= 0 && !player.blocking)
+            {
+                broke = true;
+                break;
+            }
+        }
+
+        Input.ActionRelease("block");
+        int minEnergy = player.Energy;
+        GD.Print($"[INFO] A16 起始气 {e0}，按满格挡后气 {minEnergy}，自动破防={broke}");
+        Check(broke, $"一直格挡没有把气烧空（气仍为 {minEnergy}）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A17：破防招命中格挡要打穿（全额伤害 + 长硬直）。</summary>
+    private async Task TestGuardBreakBreaksBlock()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData br = esm.secondaryAttack;
+        int hp0 = player.HP;
+        player.blocking = true;
+        player.TakeDamage(br.damage, br);
+        int loss = hp0 - player.HP;
+
+        Check(loss == br.damage, $"破防招被格挡后只掉 {loss}（应为全额 {br.damage}）");
+        Check(!player.blocking, "破防后玩家还在格挡状态");
+        Check(player.pendingStunFrames >= 30, $"破防硬直太短（{player.pendingStunFrames}）");
+
+        player.pendingStunFrames = 0;
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A18：敌人不能只会一招——两招都要出现。</summary>
+    private async Task TestBothMovesUsed()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        player.invincible = true;
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        // 站在近处，两招都有机会被选中
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 60, enemy.GlobalPosition.Y);
+
+        for (int i = 0; i < 1800; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        }
+
+        GD.Print($"[INFO] A18 1800 帧内：直拳 {esm.PrimaryUsed} 次，破防 {esm.SecondaryUsed} 次");
+        Check(esm.PrimaryUsed >= 2 && esm.SecondaryUsed >= 2,
+            $"两招使用不均（直拳 {esm.PrimaryUsed} / 破防 {esm.SecondaryUsed}）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
     /// <summary>
     /// A12：站在重拳最远射程上连打两下重拳，识破后的反击必须能打到玩家。
     /// 这条防的是"被识破反而安全"——反击够不到 → 打空 → 踉跄 → 玩家白拿 ×3。
