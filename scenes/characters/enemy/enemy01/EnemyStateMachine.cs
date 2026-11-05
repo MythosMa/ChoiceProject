@@ -164,7 +164,11 @@ public partial class EnemyStateMachine : Node
             case Phase.Active:
                 if (_frame >= _currentMove.activeFrames)
                 {
-                    if (_predictedMoveId != null && !_enemy.attackHitbox.hasConnected)
+                    // 踉跄**只**在"识破后的那一记反击"打空时发生。
+                    // 因为预判会存活 2 秒，如果按 _predictedMoveId 判断，
+                    // 这 2 秒里它任何一次打空都会白送 ×3（玩家一直躲就能刷奖励）。
+                    bool wasReadCounter = counterMove != null && _currentMove == counterMove;
+                    if (wasReadCounter && !_enemy.attackHitbox.hasConnected)
                     {
                         EnterPhase(Phase.Stagger);
                     }
