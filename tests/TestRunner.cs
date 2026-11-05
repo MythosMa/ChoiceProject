@@ -46,6 +46,7 @@ public partial class TestRunner : Node
         await RunSafe("A18 一局内两招都要出", TestBothMovesUsed);
         await RunSafe("A19 硬直中按下格挡，硬直结束后能接上", TestBlockHeldThroughHitstun);
         await RunSafe("A20 无脑连打不能赢（设计目标）", TestMashCannotWin);
+        await RunSafe("A21 闪避方向听当前输入，不听旧朝向", TestDodgeFollowsInput);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -277,6 +278,59 @@ public partial class TestRunner : Node
         return loss;
     }
 
+
+    /// <summary>
+    /// A21：闪避方向必须取"按下瞬间的输入方向"，不能取上次朝向。
+    /// 实测 bug：按住左、朝向还停在右，闪避会向右侧冲。
+    /// </summary>
+    private async Task TestDodgeFollowsInput()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        player.invincible = true;
+
+        // 先朝右走，把朝向变成 +1
+        Input.ActionPress("right");
+        await Frames(10);
+        Input.ActionRelease("right");
+        await Frames(10);
+        Check(player.facing == 1, $"朝向没转右（facing={player.facing}）");
+
+        // 按住左 + 闪避 → 必须向左
+        Input.ActionPress("left");
+        await Frames(2);
+        float x0 = player.GlobalPosition.X;
+        Input.ActionPress("dodge");
+        await Frames(1);
+        Input.ActionRelease("dodge");
+        await Frames(16);
+        Input.ActionRelease("left");
+        float leftDelta = player.GlobalPosition.X - x0;
+
+        await Frames(70); // 冷却
+
+        // 反过来：朝左后按住右 + 闪避 → 必须向右
+        Input.ActionPress("left");
+        await Frames(10);
+        Input.ActionRelease("left");
+        await Frames(10);
+        Input.ActionPress("right");
+        await Frames(2);
+        float x1 = player.GlobalPosition.X;
+        Input.ActionPress("dodge");
+        await Frames(1);
+        Input.ActionRelease("dodge");
+        await Frames(16);
+        Input.ActionRelease("right");
+        float rightDelta = player.GlobalPosition.X - x1;
+
+        GD.Print($"[INFO] A21 按住左闪避 {leftDelta:F1}px，按住右闪避 {rightDelta:F1}px");
+        Check(leftDelta < -60, $"按住左闪避却没向左（{leftDelta:F1}px）");
+        Check(rightDelta > 60, $"按住右闪避却没向右（{rightDelta:F1}px）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
 
     /// <summary>
     /// A20【设计目标断言】：只按 jab、不闪不挡，**不能赢**。
