@@ -72,6 +72,9 @@ public partial class EnemyStateMachine : Node
     /// <summary>当前霸体是否来自"解围"（全体霸体），而不是"识破某招"。</summary>
     public bool IsBurstArmor => _burstArmor;
 
+    /// <summary>进入踉跄的次数（断言用）。</summary>
+    public int StaggerCount { get; private set; }
+
     /// <summary>两招各自用了多少次（断言 A18 用）。</summary>
     public int PrimaryUsed { get; private set; }
     public int SecondaryUsed { get; private set; }
@@ -164,11 +167,14 @@ public partial class EnemyStateMachine : Node
             case Phase.Active:
                 if (_frame >= _currentMove.activeFrames)
                 {
-                    // 踉跄**只**在"识破后的那一记反击"打空时发生。
-                    // 因为预判会存活 2 秒，如果按 _predictedMoveId 判断，
-                    // 这 2 秒里它任何一次打空都会白送 ×3（玩家一直躲就能刷奖励）。
-                    bool wasReadCounter = counterMove != null && _currentMove == counterMove;
-                    if (wasReadCounter && !_enemy.attackHitbox.hasConnected)
+                    // 踉跄只发生在"**承诺招**打空"时，而不是任何攻击打空：
+                    //   - 识破后的反击（你重复用招骗它出来，再躲掉）
+                    //   - 压力满后的解围（你压满压力，再躲掉）
+                    // 普通直拳打空不算——否则玩家一直躲就能无限刷 ×3（实测 7 连）。
+                    // 收成"只有反击"又会太罕见（玩家交替用招就永远见不到）——所以两条都算。
+                    bool isCommitmentMove = (counterMove != null && _currentMove == counterMove)
+                        || (burstMove != null && _currentMove == burstMove);
+                    if (isCommitmentMove && !_enemy.attackHitbox.hasConnected)
                     {
                         EnterPhase(Phase.Stagger);
                     }
@@ -344,6 +350,7 @@ public partial class EnemyStateMachine : Node
         }
         else if (next == Phase.Stagger)
         {
+            StaggerCount++;
             FeedbackSystem.Instance.RequestShake(8, 6f);
             GD.Print("敌人扑空踉跄！大破绽，快确反×3！");
         }

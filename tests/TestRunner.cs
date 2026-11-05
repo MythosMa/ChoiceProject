@@ -47,6 +47,7 @@ public partial class TestRunner : Node
         await RunSafe("A19 硬直中按下格挡，硬直结束后能接上", TestBlockHeldThroughHitstun);
         await RunSafe("A20 无脑连打不能赢（设计目标）", TestMashCannotWin);
         await RunSafe("A21 闪避方向听当前输入，不听旧朝向", TestDodgeFollowsInput);
+        await RunSafe("A22 躲掉承诺招能让敌人踉跄（大确反入口）", TestBaitCausesStagger);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -278,6 +279,58 @@ public partial class TestRunner : Node
         return loss;
     }
 
+
+    /// <summary>
+    /// A22：**大确反（踉跄 ×3）的入口必须存在**——
+    /// 重复用招逼出识破反击，再把它躲掉，敌人应该扑空踉跄。
+    /// 这条防的是"把踉跄收得太严，玩家永远见不到 ×3"。
+    /// </summary>
+    private async Task TestBaitCausesStagger()
+    {
+        // 延迟从"第二记重拳按下"起算：重拳 12 帧前摇命中→识破武装→反击 14 帧前摇，
+        // 所以反击的判定期大约在按下后 26–30 帧，闪避（12 帧无敌）要在 18–22 帧按下才能盖住。
+        // 用 jab（可闪避取消）：命中约在按下后 6 帧，jab 全部 20 帧，之后才能闪避；
+        // 反击 14 帧前摇 → 判定期约在按下后 20–24 帧，所以闪避要卡在 jab 结束的瞬间。
+        int[] delays = { 18, 20, 22, 24, 26 };
+        int totalStaggers = 0;
+
+        foreach (int delay in delays)
+        {
+            Node2D fixture = await SpawnFixture();
+            Player player = fixture.GetNode<Player>("Player");
+            player.invincible = false;
+            Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+            EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            await Frames(2);
+
+            // 第一记轻拳（命中一次）
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+            await Frames(30);
+
+            // 第二记轻拳 → 命中瞬间识破武装、敌人立刻起反击
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+
+            // 在反击判定期之前闪避
+            await Frames(delay);
+            Input.ActionPress("dodge");
+            await Frames(1);
+            Input.ActionRelease("dodge");
+            await Frames(60);
+
+            totalStaggers += esm.StaggerCount;
+            fixture.QueueFree();
+            await Frames(1);
+        }
+
+        GD.Print($"[INFO] A22 五种闪避时机下，敌人踉跄次数合计 {totalStaggers}");
+        Check(totalStaggers > 0, "躲掉识破反击没能让敌人踉跄 —— 大确反（×3）的入口断了");
+    }
 
     /// <summary>
     /// A21：闪避方向必须取"按下瞬间的输入方向"，不能取上次朝向。
