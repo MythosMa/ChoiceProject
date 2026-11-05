@@ -64,8 +64,19 @@ public partial class EnemyStateMachine : Node
     private MoveData _currentMove;
     private MoveData _nextAttack;
 
+    /// <summary>待机时长（随机区间）。固定节奏会被玩家背板，随机化是"反背板"的第一步。</summary>
     [Export]
-    public int idleFrames = 30;
+    public int idleFramesMin = 16;
+    [Export]
+    public int idleFramesMax = 44;
+
+    /// <summary>玩家超过这个距离时，待机会慢慢逼近（不再站桩等）。</summary>
+    [Export]
+    public float approachDistance = 150f;
+    [Export]
+    public float approachSpeed = 70f;
+
+    private int _idleDuration = 30;
 
     [Export]
     public int staggerFrames = 50;
@@ -113,7 +124,7 @@ public partial class EnemyStateMachine : Node
         switch (_phase)
         {
             case Phase.Idle:
-                if (_frame >= idleFrames)
+                if (_frame >= _idleDuration)
                 {
                     EnterPhase(Phase.Startup);
                 }
@@ -305,6 +316,7 @@ public partial class EnemyStateMachine : Node
         {
             _predictedMoveId = null;
             _burstArmor = false;
+            _idleDuration = GD.RandRange(idleFramesMin, idleFramesMax);
         }
         else if (next == Phase.Recovery || next == Phase.Stagger || next == Phase.Hitstun)
         {
@@ -330,6 +342,12 @@ public partial class EnemyStateMachine : Node
     private void ApplySegmentShift()
     {
         _enemy.externalVelocityX = 0f;
+
+        if (_phase == Phase.Idle)
+        {
+            TryApproach();
+            return;
+        }
         if (_currentMove == null)
         {
             return;
@@ -371,6 +389,23 @@ public partial class EnemyStateMachine : Node
             }
         }
         _enemy.externalVelocityX = shift / frames * 60f * toward;
+    }
+
+    /// <summary>待机时如果离玩家太远，就慢慢走近——避免玩家躲在射程外等它出招。</summary>
+    private void TryApproach()
+    {
+        if (_player == null)
+        {
+            return;
+        }
+
+        float dx = _player.GlobalPosition.X - _enemy.GlobalPosition.X;
+        if (Mathf.Abs(dx) <= approachDistance)
+        {
+            return;
+        }
+
+        _enemy.externalVelocityX = Mathf.Sign(dx) * approachSpeed;
     }
 
     private void ApplyTelegraph()
