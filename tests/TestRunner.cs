@@ -44,6 +44,7 @@ public partial class TestRunner : Node
         await RunSafe("A16 格挡持续耗气，气空自动破防", TestBlockDrainsEnergy);
         await RunSafe("A17 破防招能打破格挡", TestGuardBreakBreaksBlock);
         await RunSafe("A18 一局内两招都要出", TestBothMovesUsed);
+        await RunSafe("A19 硬直中按下格挡，硬直结束后能接上", TestBlockHeldThroughHitstun);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -275,6 +276,36 @@ public partial class TestRunner : Node
         return loss;
     }
 
+
+    /// <summary>
+    /// A19：格挡是"按住"式——在硬直中按下并保持，硬直结束后必须能接上格挡。
+    /// 这条防的是"按下边缘被吞掉，之后一直按着也进不去"（实测踩过）。
+    /// </summary>
+    private async Task TestBlockHeldThroughHitstun()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        // 先制造一次硬直（不格挡）
+        player.TakeDamage(esm.attackMove.damage, esm.attackMove);
+        await Frames(2);
+
+        // 硬直中按下格挡并一直按住
+        Input.ActionPress("block");
+        await Frames(6);
+        Check(!player.blocking, "硬直中不应该立刻进入格挡");
+
+        await Frames(30); // 等硬直结束
+
+        Check(player.blocking, "硬直结束后没能接上格挡（按住式格挡失效）");
+
+        Input.ActionRelease("block");
+        await Frames(2);
+        fixture.QueueFree();
+        await Frames(1);
+    }
 
     /// <summary>A14：两招必须可区分——不同 moveId、不同颜色、不同帧数。</summary>
     private async Task TestTwoMovesDistinguishable()

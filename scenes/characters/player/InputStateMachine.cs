@@ -101,8 +101,10 @@ public partial class InputStateMachine : Node
 			return;
 		}
 
-		// 格挡：按住进入、松开退出（只在移动态可进入）
-		if (currentInputReceiver == movementHandler && (buttons & InputButtons.Block) != InputButtons.None)
+		// 格挡：按住进入、松开退出（只在移动态可进入）。
+		// 注意用"是否按住"而不是"按下边缘"——否则在硬直中按下的那一下会被吞掉，
+		// 之后一直按着也进不去（实测出现过）。
+		if (currentInputReceiver == movementHandler && (input.Current & InputButtons.Block) != InputButtons.None)
 		{
 			TransitionTo(blockHandler);
 			return;
