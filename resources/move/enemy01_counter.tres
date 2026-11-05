@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="MoveData" format=3]
+
+[ext_resource type="Script" uid="uid://duwjwvk4spb8q" path="res://scripts/data/MoveData.cs" id="1_counter"]
+
+[resource]
+script = ExtResource("1_counter")
+moveId = "enemy_counter"
+displayName = "反击"
+startupFrames = 14
+activeFrames = 4
+recoveryFrames = 26
+damage = 12
+hitstopFrames = 8
+shakeMagnitude = 9.0
+hitboxOffset = Vector2(70, 0)
+hitboxSize = Vector2(150, 34)
+accentColor = Color(1, 0.85, 0.35, 1)
+sparkAmount = 20
+metadata/_custom_type_script = "uid://duwjwvk4spb8q"

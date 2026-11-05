@@ -17,6 +17,9 @@ public partial class Hud : CanvasLayer
     [Export]
     public Label enemyLabel;
 
+    [Export]
+    public ProgressBar enemyPressureBar;
+
     private Player _player;
     private DodgeHandler _dodge;
     private Enemy01 _enemy;
@@ -63,6 +66,11 @@ public partial class Hud : CanvasLayer
             if (enemyLabel != null)
             {
                 enemyLabel.Text = $"{_enemy.displayName}   {_enemy.HP} / {maxHp}";
+            }
+            if (enemyPressureBar != null)
+            {
+                enemyPressureBar.MaxValue = Mathf.Max(1, _enemy.PressureMax);
+                enemyPressureBar.Value = _enemy.Pressure;
             }
         }
     }

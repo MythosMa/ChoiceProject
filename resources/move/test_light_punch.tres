@@ -6,11 +6,13 @@
 script = ExtResource("1_2xfqc")
 moveId = "test_light_punch"
 displayName = "轻拳"
-energyCost = 15
+energyCost = 0
 startupFrames = 6
-damage = 6
+damage = 10
 hitboxOffset = Vector2(70, 0)
 hitboxSize = Vector2(90, 14)
 accentColor = Color(0.7, 0.9, 1, 1)
 sparkAmount = 10
+hitstopFrames = 4
+shakeMagnitude = 6.0
 metadata/_custom_type_script = "uid://duwjwvk4spb8q"

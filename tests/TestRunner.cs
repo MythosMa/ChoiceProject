@@ -34,6 +34,11 @@ public partial class TestRunner : Node
         await RunSafe("A5 被识破的第 3 次同招不造成伤害", TestReadNullifiesThirdHit);
         await RunSafe("A6 架住之后敌人不再挥空踉跄", TestNoStaggerAfterArmorPunish);
         await RunSafe("A7 招式身份可配置且唯一（AI 读招不依赖代码硬编码）", TestMoveIdentity);
+        await RunSafe("A8 交替两招连打会触发解围（免费解消失）", TestBurstOnAlternating);
+        await RunSafe("A9 打两下就收手不触发解围", TestNoBurstWhenBackingOff);
+        await RunSafe("A10 一次压力周期只触发一次解围", TestSingleBurstPerCycle);
+        await RunSafe("A12 识破后的反击能打到重拳最远射程", TestReadCounterReachesHeavyRange);
+        await RunSafe("A13 被架住的反伤随招式重量放大", TestPunishScalesWithMoveWeight);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -187,6 +192,169 @@ public partial class TestRunner : Node
         await Frames(1);
     }
 
+
+    /// <summary>
+    /// 交替 jab/heavy 贴脸连打，返回这段期间新增的解围次数。
+    /// 交替是为了绕开"同名读"，专测压力读。
+    /// </summary>
+    private async Task<int> RunAlternatingAndCountBursts(int maxFrames)
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        int before = enemy.BurstCount;
+        int frames = 0;
+        bool pressed = false;
+
+        while (frames < maxFrames)
+        {
+            if (frames % 20 == 0)
+            {
+                bool heavy = (frames / 20) % 2 == 1;
+                _wasHeavy = heavy;
+                player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+                Input.ActionPress(heavy ? "heavy_punch" : "light_punch");
+                pressed = true;
+            }
+            else if (pressed)
+            {
+                Input.ActionRelease(_wasHeavy ? "heavy_punch" : "light_punch");
+                pressed = false;
+            }
+
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            frames++;
+        }
+
+        Input.ActionRelease("light_punch");
+        Input.ActionRelease("heavy_punch");
+        int bursts = enemy.BurstCount - before;
+
+        fixture.QueueFree();
+        await Frames(1);
+        return bursts;
+    }
+
+    /// <summary>
+    /// A13：被霸体架住的反伤必须随"你打过来的招"放大——
+    /// 重拳被读要比轻拳被读疼得多，否则"用重招"没有代价。
+    /// </summary>
+    private async Task TestPunishScalesWithMoveWeight()
+    {
+        int lightLoss = await RunThreeHitsAndMeasureLoss("light_punch");
+        int heavyLoss = await RunThreeHitsAndMeasureLoss("heavy_punch");
+
+        GD.Print($"[INFO] A13 反伤：轻拳被架住 -{lightLoss}，重拳被架住 -{heavyLoss}");
+        Check(heavyLoss > lightLoss,
+            $"重拳被读的代价没有更高（轻 {lightLoss} / 重 {heavyLoss}）—— 重招变成了无风险高收益");
+        Check(heavyLoss >= 40, $"重拳被读只掉 {heavyLoss}，惩罚不足以抵消一次重拳的收益（26）");
+    }
+
+    private async Task<int> RunThreeHitsAndMeasureLoss(string action)
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        player.invincible = false;
+        int hp0 = player.HP;
+
+        for (int i = 0; i < 3; i++)
+        {
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            Input.ActionPress(action);
+            await Frames(1);
+            Input.ActionRelease(action);
+            await Frames(39);
+        }
+        await Frames(6);
+
+        int loss = hp0 - player.HP;
+        fixture.QueueFree();
+        await Frames(1);
+        return loss;
+    }
+
+    /// <summary>
+    /// A12：站在重拳最远射程上连打两下重拳，识破后的反击必须能打到玩家。
+    /// 这条防的是"被识破反而安全"——反击够不到 → 打空 → 踉跄 → 玩家白拿 ×3。
+    /// 敌人 AI 必须运行，反击才会真正打出来。
+    /// </summary>
+    private async Task TestReadCounterReachesHeavyRange()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+
+        // 站在重拳最远射程附近（重拳能打到 150 左右，敌人普攻只能到 110）
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X + 150, enemy.GlobalPosition.Y);
+        await Frames(2);
+
+        Input.ActionPress("left");
+        await Frames(4);
+        Input.ActionRelease("left");
+        await Frames(4);
+        Check(player.facing == -1, $"朝向没转过去（facing={player.facing}）");
+
+        int playerHp0 = player.HP;
+        int enemyHp0 = enemy.HP;
+
+        for (int i = 0; i < 2; i++)
+        {
+            Input.ActionPress("heavy_punch");
+            await Frames(1);
+            Input.ActionRelease("heavy_punch");
+            await Frames(40);
+        }
+
+        Check(enemy.HP < enemyHp0, $"重拳在 150 距离没打到敌人（{enemyHp0} → {enemy.HP}）");
+
+        await Frames(80);
+
+        Check(player.HP < playerHp0,
+            $"识破后的反击没打到站在重拳射程上的玩家（HP {playerHp0} → {player.HP}）—— 被识破反而安全，读招变成送分");
+
+        Input.ActionRelease("heavy_punch");
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A8：交替两招连打必须触发解围——这是"免费解消失"的核心断言。</summary>
+    private async Task TestBurstOnAlternating()
+    {
+        int bursts = await RunAlternatingAndCountBursts(400);
+        Check(bursts >= 1, $"交替连打 400 帧没有触发任何解围（免费解仍在）");
+    }
+
+    /// <summary>A9：只打两下就收手，压力到不了顶，不应触发解围。</summary>
+    private async Task TestNoBurstWhenBackingOff()
+    {
+        (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        int before = enemy.BurstCount;
+
+        for (int i = 0; i < 2; i++)
+        {
+            player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+            Input.ActionPress("light_punch");
+            await Frames(1);
+            Input.ActionRelease("light_punch");
+            await Frames(21);
+        }
+
+        Check(enemy.Pressure < enemy.PressureMax, $"打两下压力就满了（{enemy.Pressure}/{enemy.PressureMax}）");
+        int afterHits = enemy.BurstCount;
+
+        await Frames(300); // 收手观望
+
+        Check(enemy.BurstCount == before && afterHits == before,
+            $"收手期间触发了 {enemy.BurstCount - before} 次解围");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A10：一次压力周期只该结算一次解围，后续命中不能重复触发。</summary>
+    private async Task TestSingleBurstPerCycle()
+    {
+        int bursts = await RunAlternatingAndCountBursts(600);
+        Check(bursts == 1, $"一次压力周期触发了 {bursts} 次解围（应为 1）");
+    }
+
     /// <summary>
     /// A7：招式身份必须来自资源里的 moveId，且互不重复。
     /// 这条防的是"AI 读招依赖代码硬编码 / 两个招式共用同一身份"。
@@ -235,7 +403,9 @@ public partial class TestRunner : Node
             await Frames(21);
         }
 
-        Check(enemy.HP == enemy.maxHP - 12, $"第 3 下没有被架住（敌人 HP={enemy.HP}）");
+        int expectedDamage = LightMoveOf(player).damage * 2;
+        Check(enemy.HP == enemy.maxHP - expectedDamage,
+            $"第 3 下没有被架住（敌人 HP={enemy.HP}，期望 {enemy.maxHP - expectedDamage}）");
 
         player.invincible = true;
         int hpBefore = enemy.HP;
@@ -270,6 +440,7 @@ public partial class TestRunner : Node
 
         int enemyHp0 = enemy.HP;
         int playerHp0 = player.HP;
+        int expectedDamage = LightMoveOf(player).damage * 2; // 前两下命中，第 3 下被架住
 
         for (int i = 0; i < 3; i++)
         {
@@ -281,8 +452,8 @@ public partial class TestRunner : Node
         }
         await Frames(6);
 
-        Check(enemyHp0 - enemy.HP == 12,
-            $"第 3 次同招不该造成伤害：敌人 {enemyHp0} → {enemy.HP}（期望只掉 12）");
+        Check(enemyHp0 - enemy.HP == expectedDamage,
+            $"第 3 次同招不该造成伤害：敌人 {enemyHp0} → {enemy.HP}（期望只掉 {expectedDamage}）");
         Check(player.HP < playerHp0,
             $"被架住后玩家没有吃到反击伤害（玩家 {playerHp0} → {player.HP}）");
 
@@ -337,21 +508,25 @@ public partial class TestRunner : Node
     private async Task TestBaseline()
     {
         int killFrames = await RunScriptAlternating(900);
-        GD.Print($"[INFO] A3 基线（冻结 AI / 玩家无敌）：交替 jab+heavy 击杀 50HP 敌人 = {killFrames} 帧（{killFrames / 60.0:F2} 秒）");
+        GD.Print($"[INFO] A3 基线（冻结 AI / 玩家无敌）：交替 jab+heavy 击杀满血敌人 = {killFrames} 帧（{killFrames / 60.0:F2} 秒）");
         Check(killFrames < 900, "900 帧内没击杀，输出链路可能断了");
+        Check(killFrames >= 150 && killFrames <= 540,
+            $"纯输出击杀 {killFrames} 帧（{killFrames / 60.0:F1}s），超出 [2.5s, 9s] 合理区间——检查 HP 与伤害数值");
 
         int remaining = await RunScriptJabOnly(240);
-        GD.Print($"[INFO] A3 对照（冻结 AI / 玩家无敌）：同名 jab 连打 240 帧后敌人剩余 {remaining}/50 HP");
+        GD.Print($"[INFO] A3 对照（冻结 AI / 玩家无敌）：同名 jab 连打 240 帧后敌人剩余 {remaining} HP");
     }
 
     private async Task<int> RunScriptAlternating(int maxFrames)
     {
         (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
         int frames = 0;
         bool pressed = false;
 
         while (enemy.HP > 0 && frames < maxFrames)
         {
+            esm.Pressure.Reset(); // 基线只测纯输出，不让解围介入
             if (frames % 20 == 0)
             {
                 bool heavy = (frames / 20) % 2 == 1;
@@ -382,11 +557,13 @@ public partial class TestRunner : Node
     private async Task<int> RunScriptJabOnly(int maxFrames)
     {
         (Node2D fixture, Player player, Enemy01 enemy) = await SpawnPassiveFight();
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
         int frames = 0;
         bool pressed = false;
 
         while (frames < maxFrames)
         {
+            esm.Pressure.Reset(); // 对照口径同上
             if (frames % 20 == 0)
             {
                 player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);

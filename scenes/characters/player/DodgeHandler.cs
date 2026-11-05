@@ -5,11 +5,15 @@ public partial class DodgeHandler : Node, IInputReceiver
 {
     [Export]
     public int dodgeFrames = 12;
+    /// <summary>冲刺速度（px/s）。12 帧 × 500 = 100px，够穿过 32px 的敌人身体还有余量。</summary>
+    [Export]
+    public float dodgeSpeed = 500f;
     [Export]
     public int cooldownFrames = 60;
 
     private int _frame;
     private uint _savedMask;
+    private uint _savedLayer;
 
     public Player player { get; set; }
     public InputStateMachine inputStateMachine { get; set; }
@@ -26,23 +30,29 @@ public partial class DodgeHandler : Node, IInputReceiver
         player.invincible = true;
         player.dodgeCooldown = cooldownFrames;
 
-        // 闪避穿人：临时去掉"敌人身体"层的检测（地面/墙壁仍在世界层，照常碰撞）。
-        // 只改 CollisionMask，不动 CollisionShape，所以不需要 deferred，也不会触发物理 flush 限制。
+        // 闪避穿人必须是**双向**的：
+        //   1) 玩家不检测敌人 —— CollisionMask 去掉敌人身体层
+        //   2) 玩家也不在敌人检测的层上 —— CollisionLayer 清零
+        // 只做 1) 的话，敌人的 mask 仍然会撞到玩家，反过来把玩家顶住（实测会被顶回 5px）。
         _savedMask = player.CollisionMask;
+        _savedLayer = player.CollisionLayer;
         player.CollisionMask = _savedMask & ~Tools.EnemyBodyLayer;
+        player.CollisionLayer = 0;
 
         player.GetNode<Sprite2D>("Sprite2D").Modulate = new Color(0.2f, 0.5f, 1.0f);
     }
     public void Exit()
     {
         player.CollisionMask = _savedMask;
+        player.CollisionLayer = _savedLayer;
         player.invincible = false;
         player.GetNode<Sprite2D>("Sprite2D").Modulate = Colors.White;
     }
     public void Tick(double delta)
     {
         _frame++;
-        player.moveAxis = player.facing;
+        // 冲刺是瞬时速度，绕过移动加减速
+        player.externalVelocityX = player.facing * dodgeSpeed;
         if (_frame >= dodgeFrames)
         {
             inputStateMachine.TransitionTo(inputStateMachine.movementHandler);

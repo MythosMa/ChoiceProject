@@ -75,9 +75,6 @@ shape = SubResource("RectangleShape2D_0tqcn")
 [node name="Enemy01" parent="." unique_id=321169640 instance=ExtResource("2_8xwxj")]
 position = Vector2(900, 685)
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=1764261495]
-position = Vector2(750, 453)
-
 [node name="Hud" parent="." unique_id=404932252 instance=ExtResource("4_3lquy")]
 
 [editable path="Player"]

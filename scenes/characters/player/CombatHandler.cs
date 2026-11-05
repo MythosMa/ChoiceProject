@@ -55,7 +55,7 @@ public partial class CombatHandler : Node, IInputReceiver
 		SetVisual(Colors.White);
 		_move = null;
 		player.WhiffPunishable = false;
-		player.combatVelocityX = 0f;
+		player.externalVelocityX = 0f;
 	}
 
 	public void Tick(double delta)
@@ -169,11 +169,11 @@ public partial class CombatHandler : Node, IInputReceiver
 
 		if (frames <= 0 || Mathf.IsZeroApprox(shift))
 		{
-			player.combatVelocityX = 0f;
+			player.externalVelocityX = 0f;
 			return;
 		}
 
-		player.combatVelocityX = shift / frames * 60f * player.facing;
+		player.externalVelocityX = shift / frames * 60f * player.facing;
 	}
 
 	private void SyncHitbox()
