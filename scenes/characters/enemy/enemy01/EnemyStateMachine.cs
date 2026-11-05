@@ -199,13 +199,18 @@ public partial class EnemyStateMachine : Node
 
     public bool IsArmoredAgainst(string moveId)
     {
-        // 解围是"全体霸体"（不看招名）；识破是"针对某招"（看招名）。
-        bool armoredPhase = _phase == Phase.Startup
-            || _phase == Phase.Active
-            || _phase == Phase.Recovery;
-        bool match = _burstArmor || (_predictedMoveId != null && _predictedMoveId == moveId);
-        DebugLog.V($"[霸体检查] 来招={moveId} 预判={_predictedMoveId ?? "无"} 解围={_burstArmor} 阶段={_phase} 匹配={match} 霸体段={armoredPhase}");
-        return match && armoredPhase;
+        // 解围 = 全体霸体（看阶段）；识破 = 针对某招（看招名，**任何动作阶段都成立**）。
+        if (_phase == Phase.Stagger || _phase == Phase.Hitstun)
+        {
+            return false;
+        }
+
+        bool byPrediction = _predictedMoveId != null && _predictedMoveId == moveId;
+        bool byBurst = _burstArmor
+            && (_phase == Phase.Startup || _phase == Phase.Active || _phase == Phase.Recovery);
+        bool match = byPrediction || byBurst;
+        DebugLog.V($"[霸体检查] 来招={moveId} 预判={_predictedMoveId ?? "无"} 解围={_burstArmor} 阶段={_phase} 匹配={match}");
+        return match;
     }
 
     public void RegisterHit(MoveData move)
@@ -340,7 +345,9 @@ public partial class EnemyStateMachine : Node
         }
         else if (next == Phase.Idle)
         {
-            _predictedMoveId = null;
+            // 预判**不在待机时清除**：否则"被识破"只在它出招的三段里成立，
+            // 玩家只要等它收招再打，就白嫖了（实测重拳 spam 就是这么赢的）。
+            // 过期交给 greedWindowFrames。
             _burstArmor = false;
             _idleDuration = GD.RandRange(idleFramesMin, idleFramesMax);
         }

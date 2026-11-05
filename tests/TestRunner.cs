@@ -45,6 +45,7 @@ public partial class TestRunner : Node
         await RunSafe("A17 破防招能打破格挡", TestGuardBreakBreaksBlock);
         await RunSafe("A18 一局内两招都要出", TestBothMovesUsed);
         await RunSafe("A19 硬直中按下格挡，硬直结束后能接上", TestBlockHeldThroughHitstun);
+        await RunSafe("A20 无脑连打不能赢（设计目标）", TestMashCannotWin);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -276,6 +277,83 @@ public partial class TestRunner : Node
         return loss;
     }
 
+
+    /// <summary>
+    /// A20【设计目标断言】：只按 jab、不闪不挡，**不能赢**。
+    /// 之前的问题是"靠血量淹死敌人"——这条把"能不能淹死"变成可测的数字。
+    /// 如果这条是绿的，说明玩家必须做点什么（闪/挡/换招）才能赢。
+    /// </summary>
+    private async Task TestMashCannotWin()
+    {
+        (int pHp, int eHp, int frames) jab = await RunMasher("jab");
+        (int pHp, int eHp, int frames) alt = await RunMasher("alternate");
+        (int pHp, int eHp, int frames) heavy = await RunMasher("heavy");
+
+        GD.Print($"[INFO] A20 单招 jab：玩家 {jab.pHp} / 敌人 {jab.eHp}（{jab.frames} 帧）");
+        GD.Print($"[INFO] A20 交替 jab/重拳：玩家 {alt.pHp} / 敌人 {alt.eHp}（{alt.frames} 帧）");
+        GD.Print($"[INFO] A20 重拳为主：玩家 {heavy.pHp} / 敌人 {heavy.eHp}（{heavy.frames} 帧）");
+
+        Check(jab.eHp > 0, $"单招 jab 连打能赢（玩家剩 {jab.pHp}）");
+        Check(alt.eHp > 0, $"交替 jab/重拳 连打能赢（玩家剩 {alt.pHp}）—— 免费解仍在");
+        Check(heavy.eHp > 0, $"重拳为主 连打能赢（玩家剩 {heavy.pHp}）");
+    }
+
+    /// <summary>三种"无脑打法"脚本：只攻击，不闪不挡。</summary>
+    private async Task<(int pHp, int eHp, int frames)> RunMasher(string pattern)
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 45, enemy.GlobalPosition.Y);
+        await Frames(2);
+
+        int frames = 0;
+        int step = 0;
+        while (frames < 2400 && player.HP > 0 && enemy.HP > 0)
+        {
+            bool fire = false;
+            string action = "light_punch";
+
+            if (pattern == "jab")
+            {
+                fire = frames % 20 == 0;
+            }
+            else if (pattern == "alternate")
+            {
+                fire = frames % 20 == 0;
+                action = (step++ % 2 == 0) ? "light_punch" : "heavy_punch";
+                if (action == "heavy_punch" && player.Energy < 25)
+                {
+                    action = "light_punch";
+                }
+            }
+            else // heavy
+            {
+                fire = frames % 34 == 0;
+                action = player.Energy >= 25 ? "heavy_punch" : "light_punch";
+            }
+
+            if (fire)
+            {
+                Input.ActionPress(action);
+                await Frames(1);
+                Input.ActionRelease(action);
+            }
+
+            await Frames(1);
+            frames++;
+        }
+
+        Input.ActionRelease("light_punch");
+        Input.ActionRelease("heavy_punch");
+        int pHp = player.HP;
+        int eHp = enemy.HP;
+
+        fixture.QueueFree();
+        await Frames(1);
+        return (pHp, eHp, frames);
+    }
 
     /// <summary>
     /// A19：格挡是"按住"式——在硬直中按下并保持，硬直结束后必须能接上格挡。
