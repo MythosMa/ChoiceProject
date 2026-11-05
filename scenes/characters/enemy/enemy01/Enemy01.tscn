@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://b5jqd46ydk0kg" path="res://scenes/combat/components/Hurtbox.tscn" id="6_xhuhs"]
 [ext_resource type="Resource" path="res://resources/move/enemy01_burst.tres" id="7_burst"]
 [ext_resource type="Resource" path="res://resources/move/enemy01_counter.tres" id="8_counter"]
+[ext_resource type="Resource" path="res://resources/move/enemy01_guardbreak.tres" id="9_gb"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wt40p"]
 size = Vector2(32, 32)
@@ -52,6 +53,7 @@ attackMove = ExtResource("4_h743h")
 punishMove = ExtResource("6_tv226")
 burstMove = ExtResource("7_burst")
 counterMove = ExtResource("8_counter")
+secondaryAttack = ExtResource("9_gb")
 punishRange = 170.0
 
 [node name="Hurtbox" parent="." unique_id=1020424420 instance=ExtResource("6_xhuhs")]

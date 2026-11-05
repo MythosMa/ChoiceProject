@@ -27,6 +27,19 @@ public partial class EnemyStateMachine : Node
     [Export]
     public MoveData counterMove;
 
+    /// <summary>第二招：破防快招。让敌人有两张牌，玩家要"读哪一张"。</summary>
+    [Export]
+    public MoveData secondaryAttack;
+
+    /// <summary>近距离时选择第二招的概率（0~1）。</summary>
+    [Export]
+    public float secondaryChanceClose = 0.45f;
+    [Export]
+    public float secondaryChanceFar = 0.15f;
+    /// <summary>低于这个距离算"近"。</summary>
+    [Export]
+    public float closeRange = 120f;
+
     /// <summary>压力每掉 1 格需要的秒数。</summary>
     [Export]
     public float pressureDecaySeconds = 1.0f;
@@ -58,6 +71,10 @@ public partial class EnemyStateMachine : Node
 
     /// <summary>当前霸体是否来自"解围"（全体霸体），而不是"识破某招"。</summary>
     public bool IsBurstArmor => _burstArmor;
+
+    /// <summary>两招各自用了多少次（断言 A18 用）。</summary>
+    public int PrimaryUsed { get; private set; }
+    public int SecondaryUsed { get; private set; }
     private int _repeatCount;
     private int _greedTimer;
     private string _predictedMoveId; // 反制针对的招式i
@@ -126,6 +143,15 @@ public partial class EnemyStateMachine : Node
             case Phase.Idle:
                 if (_frame >= _idleDuration)
                 {
+                    _nextAttack = PickAttack();
+                    if (_nextAttack == secondaryAttack)
+                    {
+                        SecondaryUsed++;
+                    }
+                    else if (_nextAttack == attackMove)
+                    {
+                        PrimaryUsed++;
+                    }
                     EnterPhase(Phase.Startup);
                 }
                 break;
@@ -391,6 +417,22 @@ public partial class EnemyStateMachine : Node
         _enemy.externalVelocityX = shift / frames * 60f * toward;
     }
 
+    /// <summary>
+    /// 两招之间选择：近距离时更容易出破防快招，远距离偏向直拳。
+    /// 关键是**不能有固定顺序**，否则玩家会背"下一招是什么"。
+    /// </summary>
+    private MoveData PickAttack()
+    {
+        if (secondaryAttack == null || _player == null)
+        {
+            return attackMove;
+        }
+
+        float dist = Mathf.Abs(_player.GlobalPosition.X - _enemy.GlobalPosition.X);
+        float chance = dist <= closeRange ? secondaryChanceClose : secondaryChanceFar;
+        return GD.Randf() < chance ? secondaryAttack : attackMove;
+    }
+
     /// <summary>待机时如果离玩家太远，就慢慢走近——避免玩家躲在射程外等它出招。</summary>
     private void TryApproach()
     {
@@ -448,7 +490,13 @@ public partial class EnemyStateMachine : Node
         switch (_phase)
         {
             case Phase.Startup:
-                _enemy.attackHitbox.ShowThreat(new Color(1.0f, 0.85f, 0.0f, 0.35f));
+            {
+                // 威胁框用**招式自己的颜色**：两招一眼可分（直拳黄 / 破防品红），
+                // 而且形状也不同（110×24 细长 vs 70×50 粗短）。
+                Color accent = _currentMove != null ? _currentMove.accentColor : new Color(1.0f, 0.85f, 0.0f);
+                _enemy.attackHitbox.ShowThreat(new Color(accent.R, accent.G, accent.B, 0.35f));
+                break;
+            }
                 break;
             case Phase.Active:
                 _enemy.attackHitbox.ShowThreat(new Color(1.0f, 0.1f, 0.1f, 0.6f));

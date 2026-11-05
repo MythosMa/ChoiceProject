@@ -39,6 +39,11 @@ public partial class TestRunner : Node
         await RunSafe("A10 一次压力周期只触发一次解围", TestSingleBurstPerCycle);
         await RunSafe("A12 识破后的反击能打到重拳最远射程", TestReadCounterReachesHeavyRange);
         await RunSafe("A13 被架住的反伤随招式重量放大", TestPunishScalesWithMoveWeight);
+        await RunSafe("A14 敌人两招可区分", TestTwoMovesDistinguishable);
+        await RunSafe("A15 格挡减伤且不进硬直", TestBlockReducesDamage);
+        await RunSafe("A16 格挡持续耗气，气空自动破防", TestBlockDrainsEnergy);
+        await RunSafe("A17 破防招能打破格挡", TestGuardBreakBreaksBlock);
+        await RunSafe("A18 一局内两招都要出", TestBothMovesUsed);
 
         GD.Print($"=== RESULT: {_passed} passed, {_failed} failed ===");
         GetTree().Quit(_failed > 0 ? 1 : 0);
@@ -270,6 +275,135 @@ public partial class TestRunner : Node
         return loss;
     }
 
+
+    /// <summary>A14：两招必须可区分——不同 moveId、不同颜色、不同帧数。</summary>
+    private async Task TestTwoMovesDistinguishable()
+    {
+        Node2D fixture = await SpawnFixture();
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData primary = esm.attackMove;
+        MoveData secondary = esm.secondaryAttack;
+
+        Check(primary != null && secondary != null, "第二招没配");
+        Check(primary.moveId != secondary.moveId, "两招 moveId 相同");
+        Check(primary.accentColor != secondary.accentColor, "两招颜色相同，玩家分不出来");
+        Check(primary.startupFrames != secondary.startupFrames,
+            $"两招前摇相同（{primary.startupFrames}），节奏上也没区别");
+        Check(secondary.guardBreak, "第二招没有破防标记");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A15：格挡吃到的伤害必须显著降低，且不进硬直。</summary>
+    private async Task TestBlockReducesDamage()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData normal = esm.attackMove;
+        int raw = normal.damage;
+
+        int hp0 = player.HP;
+        player.blocking = true;
+        player.TakeDamage(raw, normal);
+        int blockedLoss = hp0 - player.HP;
+
+        int hp1 = player.HP;
+        player.blocking = false;
+        player.TakeDamage(raw, normal);
+        int openLoss = hp1 - player.HP;
+
+        GD.Print($"[INFO] A15 格挡吃 {blockedLoss}，裸吃 {openLoss}（原伤害 {raw}）");
+        Check(blockedLoss <= Mathf.CeilToInt(raw * 0.15f),
+            $"格挡没减伤（吃 {blockedLoss} / 原 {raw}）");
+        Check(openLoss == raw, $"裸吃伤害不对（{openLoss} / {raw}）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A16：一直按着格挡，气会被烧空并自动破防。</summary>
+    private async Task TestBlockDrainsEnergy()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        player.invincible = true;
+
+        int e0 = player.Energy;
+        Input.ActionPress("block");
+
+        bool broke = false;
+        for (int i = 0; i < 600; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            if (player.Energy <= 0 && !player.blocking)
+            {
+                broke = true;
+                break;
+            }
+        }
+
+        Input.ActionRelease("block");
+        int minEnergy = player.Energy;
+        GD.Print($"[INFO] A16 起始气 {e0}，按满格挡后气 {minEnergy}，自动破防={broke}");
+        Check(broke, $"一直格挡没有把气烧空（气仍为 {minEnergy}）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A17：破防招命中格挡要打穿（全额伤害 + 长硬直）。</summary>
+    private async Task TestGuardBreakBreaksBlock()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        MoveData br = esm.secondaryAttack;
+        int hp0 = player.HP;
+        player.blocking = true;
+        player.TakeDamage(br.damage, br);
+        int loss = hp0 - player.HP;
+
+        Check(loss == br.damage, $"破防招被格挡后只掉 {loss}（应为全额 {br.damage}）");
+        Check(!player.blocking, "破防后玩家还在格挡状态");
+        Check(player.pendingStunFrames >= 30, $"破防硬直太短（{player.pendingStunFrames}）");
+
+        player.pendingStunFrames = 0;
+        fixture.QueueFree();
+        await Frames(1);
+    }
+
+    /// <summary>A18：敌人不能只会一招——两招都要出现。</summary>
+    private async Task TestBothMovesUsed()
+    {
+        Node2D fixture = await SpawnFixture();
+        Player player = fixture.GetNode<Player>("Player");
+        player.invincible = true;
+        Enemy01 enemy = fixture.GetNode<Enemy01>("Enemy01");
+        EnemyStateMachine esm = enemy.GetNode<EnemyStateMachine>("EnemyStateMachine");
+
+        // 站在近处，两招都有机会被选中
+        player.GlobalPosition = new Vector2(enemy.GlobalPosition.X - 60, enemy.GlobalPosition.Y);
+
+        for (int i = 0; i < 1800; i++)
+        {
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        }
+
+        GD.Print($"[INFO] A18 1800 帧内：直拳 {esm.PrimaryUsed} 次，破防 {esm.SecondaryUsed} 次");
+        Check(esm.PrimaryUsed >= 2 && esm.SecondaryUsed >= 2,
+            $"两招使用不均（直拳 {esm.PrimaryUsed} / 破防 {esm.SecondaryUsed}）");
+
+        fixture.QueueFree();
+        await Frames(1);
+    }
     /// <summary>
     /// A12：站在重拳最远射程上连打两下重拳，识破后的反击必须能打到玩家。
     /// 这条防的是"被识破反而安全"——反击够不到 → 打空 → 踉跄 → 玩家白拿 ×3。
